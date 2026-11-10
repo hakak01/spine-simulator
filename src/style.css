@@ -1,0 +1,52 @@
+:root {
+  --bg: #12171d; --panel: #1b222b; --line: #2e3845; --text: #dbe6f0; --muted: #8fa1b3;
+  --accent: #3fa7ff; --on: #1f6f3f; --warn: #d0463b;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+  font: 14px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; touch-action: none;
+  -webkit-user-select: none; user-select: none; }
+#view3d { position: fixed; inset: 0; }
+#view3d canvas { display: block; }
+
+#monitor { position: fixed; top: max(8px, env(safe-area-inset-top)); right: 8px; width: min(56vw, 460px);
+  background: #000; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; z-index: 5;
+  box-shadow: 0 6px 24px #0008; }
+#monitor.max { width: min(96vw, 96vh); }
+#monitor .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--panel);
+  color: var(--muted); font-size: 12px; cursor: move; touch-action: none; }
+#monitor .bar button { padding: 2px 8px; min-height: 26px; }
+#monitor canvas { display: block; width: 100%; height: auto; aspect-ratio: 1; }
+#monitor .resize { position: absolute; right: 0; bottom: 0; width: 26px; height: 26px; cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, var(--muted) 50%, var(--muted) 58%, transparent 58%, transparent 70%, var(--muted) 70%, var(--muted) 78%, transparent 78%); }
+.grow { flex: 1; }
+
+#dock { position: fixed; left: 0; right: 0; bottom: 0; padding: 6px 6px max(6px, env(safe-area-inset-bottom));
+  background: #12171dee; border-top: 1px solid var(--line); z-index: 4; display: flex; flex-direction: column; gap: 5px; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.grp { display: flex; gap: 3px; align-items: center; background: var(--panel); border-radius: 8px; padding: 3px; }
+.lbl { color: var(--muted); font-size: 11px; padding: 0 4px; }
+button { background: #26303b; color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+  min-height: 36px; padding: 4px 9px; font: inherit; font-size: 13px; touch-action: manipulation; }
+button:active { background: #33414f; }
+button.big { background: #8a2a22; border-color: #b33a2f; font-weight: 600; padding: 4px 16px; }
+button.big:active { background: var(--warn); }
+button.toggle.on { background: var(--on); border-color: #2c9a57; }
+button.sel { border-color: var(--accent); color: #fff; }
+#readout { color: var(--muted); font-size: 12px; min-height: 16px; }
+#credit { color: #5d6b7a; font-size: 10px; }
+#dock.min .row:not(.main), #dock.min #readout, #dock.min #credit { display: none; }
+
+#loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
+  padding: 20px; background: var(--bg); z-index: 20; font-size: 16px; }
+#loading.hide { display: none; }
+#vrbutton { bottom: auto !important; top: 10px !important; left: 10px !important; width: 130px !important; z-index: 6 !important; }
+
+@media (orientation: landscape) and (max-height: 600px) {
+  #monitor { width: min(44vh, 40vw); left: 8px; right: auto; }
+  #credit { display: none; }
+  #dock { left: auto; width: min(54vw, 470px); right: 0; border-left: 1px solid var(--line); border-radius: 10px 0 0 0; gap: 3px; padding-top: 4px; }
+  .row { gap: 4px; }
+  button { min-height: 30px; padding: 2px 6px; font-size: 12px; }
+  .lbl { font-size: 10px; }
+}

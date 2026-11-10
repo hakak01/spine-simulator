@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Spine Injection Simulator</title>
+<link rel="stylesheet" href="src/style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
+</head>
+<body>
+<div id="view3d"></div>
+
+<div id="monitor">
+  <div class="bar" id="monbar"><span>C-arm image</span><span class="grow"></span><button id="mon-max" title="Bigger / smaller">⤢</button></div>
+  <canvas id="fluoro" width="512" height="512"></canvas>
+  <div class="resize" id="monresize"></div>
+</div>
+
+<div id="dock">
+  <div class="row">
+    <div class="grp"><span class="lbl">Oblique</span><button data-hold="obl-1">◄ R</button><button data-hold="obl1">L ►</button></div>
+    <div class="grp"><span class="lbl">Tilt</span><button data-hold="tilt1">▲ Cran</button><button data-hold="tilt-1">▼ Caud</button></div>
+    <div class="grp"><button data-act="AP">AP</button><button data-act="LAT">LAT</button><button data-act="OBLL">Obl L</button><button data-act="OBLR">Obl R</button></div>
+  </div>
+  <div class="row">
+    <div class="grp pad"><span class="lbl">Move C-arm</span>
+      <button data-hold="panL">←</button><button data-hold="panU">↑</button><button data-hold="panD">↓</button><button data-hold="panR">→</button></div>
+    <div class="grp" id="levels"><span class="lbl">Go to</span></div>
+  </div>
+  <div class="row main">
+    <button id="shot" class="big">● SHOT</button>
+    <button id="live" class="toggle">LIVE</button>
+    <button id="bones" class="toggle">Bones</button>
+    <button id="flip" class="toggle">Flip L/R</button>
+    <button id="cam">Reset view</button>
+    <button id="fold" title="Hide / show controls">▾ Less</button>
+  </div>
+  <div id="readout"></div>
+  <div id="credit">CT: TotalSegmentator dataset, case s0461 (Wasserthal et al., Radiol AI 2023), CC BY 4.0</div>
+</div>
+
+<div id="loading">Loading…</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
