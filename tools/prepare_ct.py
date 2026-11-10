@@ -19,6 +19,7 @@ What this script does
    data/ct_u8.bin.gz  uint8 volume, HU = value*10 - 1000, x fastest (RAS index order)
    data/skin.bin.gz   body surface mesh
    data/bone.bin.gz   bone surface mesh
+   data/labels_u8.bin.gz  tissue label per voxel (see "labels" in ct.json)
    data/ct.json       size, spacing, landmarks (mm, volume frame)
 
 Needs: pip install remotezip nibabel numpy scipy scikit-image fast-simplification
@@ -42,6 +43,17 @@ VESSELS_AND_KIDNEYS = {
     "aorta": 40, "inferior_vena_cava": 40, "iliac_artery_left": 40, "iliac_artery_right": 40,
     "iliac_vena_left": 40, "iliac_vena_right": 40, "kidney_left": 35, "kidney_right": 35,
     "portal_vein_and_splenic_vein": 40,
+}
+LABELS = {  # code -> TotalSegmentator masks (bone = 2 is added from BONES)
+    7: ["autochthon_left", "autochthon_right", "iliopsoas_left", "iliopsoas_right",
+        "gluteus_maximus_left", "gluteus_maximus_right", "gluteus_medius_left", "gluteus_medius_right",
+        "gluteus_minimus_left", "gluteus_minimus_right"],
+    6: ["colon", "small_bowel", "duodenum"],
+    8: ["kidney_left", "kidney_right"],
+    9: ["urinary_bladder", "prostate"],
+    5: ["inferior_vena_cava", "iliac_vena_left", "iliac_vena_right"],
+    4: ["aorta", "iliac_artery_left", "iliac_artery_right"],
+    3: ["spinal_cord"],
 }
 BONES = ["vertebrae_L1", "vertebrae_L2", "vertebrae_L3", "vertebrae_L4", "vertebrae_L5",
          "vertebrae_S1", "sacrum", "hip_left", "hip_right", "femur_left", "femur_right",
@@ -144,6 +156,22 @@ def main():
     v, f = mesh(bone_field, 180.0, sp, 160000)
     save_mesh(os.path.join(OUT, "bone.bin.gz"), v, f)
 
+    # 4b. tissue label volume (used for needle feel and, later, contrast patterns)
+    lab = np.where(body, 1, 0).astype(np.uint8)
+    for code, names in LABELS.items():
+        for n in names:
+            try:
+                lab[load(n)[sl] & body] = code
+            except FileNotFoundError:
+                pass
+    seg_bone = np.zeros(dims, bool)
+    for b in BONES:
+        seg_bone |= load(b)[sl]
+    lab[ndimage.binary_dilation(seg_bone, iterations=1) & (hu > 130)] = 2
+    with gzip.open(os.path.join(OUT, "labels_u8.bin.gz"), "wb", compresslevel=9) as f:
+        f.write(np.ascontiguousarray(lab.transpose(2, 1, 0)).tobytes())
+    print(f"  labels_u8.bin.gz: {os.path.getsize(os.path.join(OUT, 'labels_u8.bin.gz'))/1e6:.2f} MB")
+
     # 5. landmarks (mm in cropped volume frame, index*spacing)
     lm = {}
     for lv in ["L2", "L3", "L4", "L5"]:
@@ -162,6 +190,8 @@ def main():
         "dims": [int(d) for d in dims],
         "spacing": [float(s) for s in sp],
         "encoding": "uint8, HU = v*10 - 1000, x fastest; axes: +x patient right, +y anterior, +z superior",
+        "labels": {"0": "air", "1": "soft tissue", "2": "bone", "3": "spinal canal", "4": "artery",
+                   "5": "vein", "6": "bowel", "7": "muscle", "8": "kidney", "9": "bladder/prostate"},
         "landmarks": lm,
     }
     with open(os.path.join(OUT, "ct.json"), "w") as f:

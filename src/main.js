@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import { DRR, toImage } from './drr.js';
 import { CArm } from './carm.js';
 import { setupXR } from './xr.js';
+import { Tissue, Needle } from './needle.js';
 
 const $ = (id) => document.getElementById(id);
 const loading = $('loading');
@@ -67,8 +68,8 @@ const carm = new CArm();
 scene.add(carm.model);
 
 // ---------- state ----------
-const state = { k: 0.012, shots: 0, liveSec: 0, live: false, bones: false, preset: 'AP', level: 'L4-5', dirty: false, lastMove: 0, hq: true };
-let drr, volToWorld, worldToVol, levels = {}, xr = null;
+const state = { lastLive: 0, k: 0.012, shots: 0, liveSec: 0, live: false, bones: false, preset: 'AP', level: 'L4-5', dirty: false, lastMove: 0, hq: true };
+let drr, volToWorld, worldToVol, levels = {}, xr = null, needle = null, skinMesh = null;
 const fcanvas = $('fluoro');
 const fctx = fcanvas.getContext('2d');
 const off = document.createElement('canvas');
@@ -90,6 +91,11 @@ function volFrame() {
 }
 
 function makeImage(size, step) {
+  if (needle && needle.state !== 'none') {
+    const tip = needle.tip().applyMatrix4(worldToVol), hub = needle.hub().applyMatrix4(worldToVol);
+    const hubEnd = hub.clone().add(hub.clone().sub(tip).normalize().multiplyScalar(20));
+    drr.setNeedle({ tip, hub, hubEnd, radius: needle.radius }, 2 * carm.detR * 1000 * carm.SOD / carm.SID / size);
+  } else drr.setNeedle(null);
   const sums = drr.render(volFrame(), size, step);
   const img = toImage(sums, size, { flip: carm.flip, k: state.k });
   off.width = size; off.height = size;
@@ -161,6 +167,130 @@ function toggleBones() {
 function readout() {
   $('readout').textContent = `${carm.label()}  ·  centre: ${state.level}  ·  shots ${state.shots}  ·  live ${state.liveSec.toFixed(1)} s`;
 }
+
+// ---------- needle ----------
+const AX_X = new THREE.Vector3(1, 0, 0), AX_Z = new THREE.Vector3(0, 0, 1);
+let placing = false, lastBuzz = 0, audio = null, boneFlash = 0;
+
+function boneFeedback() { // mild buzz (Android, Quest) + soft tick (all phones)
+  const now = performance.now();
+  boneFlash = now;
+  if (now - lastBuzz < 180) return;
+  lastBuzz = now;
+  if (navigator.vibrate) navigator.vibrate(30);
+  if (xr) xr.buzz(0.3, 50);
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.frequency.value = 140; g.gain.setValueAtTime(0.12, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.06);
+    o.connect(g).connect(audio.destination); o.start(); o.stop(audio.currentTime + 0.07);
+  } catch (e) { /* no sound */ }
+}
+
+function needleChanged() {
+  state.lastMove = performance.now();
+  if (state.live) { state.dirty = true; state.hq = false; }
+  needleReadout();
+}
+
+function needleReadout() {
+  const el = $('nread');
+  if (!needle || needle.state === 'none') {
+    el.textContent = placing ? 'Now tap the patient\'s back to choose the skin entry point.' : 'Tap "Place on skin", then tap the patient\'s back.';
+    el.classList.remove('bone');
+    return;
+  }
+  const a = needle.angles();
+  const ang = (v, pos, neg) => (Math.abs(v) < 0.5 ? '' : `${Math.abs(v).toFixed(0)}° ${v > 0 ? pos : neg}`);
+  const parts = [ang(a.cranial, 'to head', 'to feet'), ang(a.left, 'to left', 'to right')].filter(Boolean).join(', ') || 'straight down';
+  let t = `Depth ${needle.depth.toFixed(1)} mm of ${needle.length}  ·  ${parts}  ·  skin punctures ${needle.punctures}`;
+  if (needle.boneContact) t += '  ·  BONE CONTACT';
+  else if (needle.depth >= needle.length - 0.01) t += '  ·  hub at skin';
+  else if (needle.depth > 15) t += '  ·  deep: angle changes are small';
+  el.textContent = t;
+  el.classList.toggle('bone', needle.boneContact);
+}
+
+function setPlacing(on) {
+  placing = on;
+  $('n-place').classList.toggle('on', on);
+  $('n-place').classList.toggle('arm', on);
+  needleReadout();
+}
+
+function placeNeedleAt(point, normal) { // world point on the skin, outward normal
+  const inward = normal.clone().negate();
+  let d = carm.dir().negate();               // along the beam, toward the tube ("down the beam")
+  if (d.dot(inward) < 0.25) d = inward;
+  needle.place(point, d);
+  setPlacing(false);
+}
+
+function tapSkin(clientX, clientY) {
+  const r = renderer.domElement.getBoundingClientRect();
+  const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+  const rc = new THREE.Raycaster();
+  rc.setFromCamera(ndc, camera);
+  const hit = rc.intersectObject(skinMesh, false)[0];
+  if (!hit) return false;
+  const n = hit.face.normal.clone().transformDirection(skinMesh.matrixWorld);
+  placeNeedleAt(hit.point, n);
+  return true;
+}
+
+const TAP = { // [first tap, per second while held]
+  in1: [() => needle.advance(1), (dt) => needle.advance(10 * dt)],
+  out1: [() => needle.advance(-1), (dt) => needle.advance(-10 * dt)],
+  in5: [() => needle.advance(5), null],
+  out5: [() => needle.advance(-5), null],
+  aimCr: [() => needle.rotate(AX_Z, -1), (dt) => needle.rotate(AX_Z, -12 * dt)],
+  aimCa: [() => needle.rotate(AX_Z, 1), (dt) => needle.rotate(AX_Z, 12 * dt)],
+  aimL: [() => needle.rotate(AX_X, -1), (dt) => needle.rotate(AX_X, -12 * dt)],
+  aimR: [() => needle.rotate(AX_X, 1), (dt) => needle.rotate(AX_X, 12 * dt)],
+};
+const heldTap = new Set();
+document.querySelectorAll('[data-tap]').forEach((b) => {
+  const k = b.dataset.tap;
+  let timer = 0;
+  const stop = () => { clearTimeout(timer); heldTap.delete(k); };
+  b.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (!needle || needle.state !== 'skin') { needleReadout(); return; }
+    TAP[k][0]();
+    if (TAP[k][1]) timer = setTimeout(() => heldTap.add(k), 400);
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => b.addEventListener(ev, stop));
+});
+$('n-place').addEventListener('click', () => setPlacing(!placing));
+$('n-remove').addEventListener('click', () => { needle.remove(); setPlacing(false); });
+$('n-beam').addEventListener('click', () => {
+  if (needle.state !== 'skin') return;
+  if (needle.depth > 15) { $('nread').textContent = 'Too deep to re-aim. Withdraw to under 15 mm first.'; return; }
+  needle.aim(carm.dir().negate());
+});
+$('n-len').addEventListener('click', () => {
+  needle.setLength(needle.length === 89 ? 127 : 89);
+  $('n-len').textContent = needle.length === 89 ? 'Needle 3.5 in' : 'Needle 5 in';
+});
+document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach((o) => o.classList.toggle('sel', o === b));
+  $('tab-carm').classList.toggle('hide', b.dataset.tab !== 'carm');
+  $('tab-needle').classList.toggle('hide', b.dataset.tab !== 'needle');
+  if (b.dataset.tab !== 'needle') setPlacing(false);
+}));
+// a tap (not a drag) on the 3D view places the needle
+(function tapToPlace() {
+  let down = null;
+  const el = renderer.domElement;
+  el.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+  el.addEventListener('pointerup', (e) => {
+    if (!down || !placing || !needle) return;
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+    if (moved < 8 && performance.now() - down.t < 600) tapSkin(e.clientX, e.clientY);
+    down = null;
+  });
+})();
 
 // hold-to-repeat buttons
 const HOLD = {
@@ -265,10 +395,11 @@ function tick() {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   held.forEach((k) => HOLD[k](dt));
+  heldTap.forEach((k) => TAP[k][1](dt));
   if (xr) xr.update(dt);
   if (drr && state.live) {
     state.liveSec += dt;
-    if (state.dirty) { makeImage(256, 1.2); state.dirty = false; }
+    if (state.dirty && now - state.lastLive > 70) { makeImage(256, 1.2); state.dirty = false; state.lastLive = now; }
     else if (!state.hq && now - state.lastMove > 350) { makeImage(512, 0.75); state.hq = true; }
     if (Math.round(state.liveSec * 10) % 5 === 0) readout();
   }
@@ -282,10 +413,10 @@ async function start() {
     if (!renderer.capabilities.isWebGL2) throw new Error('This browser has no WebGL2.');
     loading.textContent = 'Loading CT scan…';
     const meta = await (await fetch('data/ct.json')).json();
-    const [ct, skinBuf, boneBuf] = await Promise.all([
-      fetchBin('data/ct_u8.bin.gz'), fetchBin('data/skin.bin.gz'), fetchBin('data/bone.bin.gz')]);
+    const [ct, skinBuf, boneBuf, labels] = await Promise.all([
+      fetchBin('data/ct_u8.bin.gz'), fetchBin('data/skin.bin.gz'), fetchBin('data/bone.bin.gz'), fetchBin('data/labels_u8.bin.gz')]);
     const [nx, ny, nz] = meta.dims;
-    if (ct.length !== nx * ny * nz) throw new Error('CT data size is wrong.');
+    if (ct.length !== nx * ny * nz || labels.length !== ct.length) throw new Error('CT data size is wrong.');
     const tex = new THREE.Data3DTexture(ct, nx, ny, nz);
     tex.format = THREE.RedFormat;
     tex.type = THREE.UnsignedByteType;
@@ -307,8 +438,15 @@ async function start() {
     const patient = new THREE.Group();
     patient.matrixAutoUpdate = false;
     patient.matrix.copy(volToWorld);
-    patient.add(new THREE.Mesh(skinG, skinMat), new THREE.Mesh(boneG, boneMat));
+    skinMesh = new THREE.Mesh(skinG, skinMat);
+    patient.add(skinMesh, new THREE.Mesh(boneG, boneMat));
     scene.add(patient);
+    patient.updateMatrixWorld(true);
+
+    needle = new Needle(new Tissue(ct, labels, meta, worldToVol));
+    needle.onBone = boneFeedback;
+    needle.onChange = needleChanged;
+    scene.add(needle.model);
 
     const W = (p) => new THREE.Vector3(...p).applyMatrix4(volToWorld);
     levels = {
@@ -330,12 +468,13 @@ async function start() {
     state.shots = 0;
     readout();
     xr = await setupXR(renderer, scene, {
-      canvas: fcanvas, shot, moveCArm, panCArm, toggleLive, toggleBones,
+      canvas: fcanvas, shot, moveCArm, panCArm, toggleLive, toggleBones, needle,
+      tray: new THREE.Vector3(0.38, TABLE_TOP + 0.03, MIDLINE_Z + 0.36),
       togglePreset: () => setPreset(state.preset === 'AP' ? 'LAT' : 'AP'),
       onXR: () => {},
     });
     loading.classList.add('hide');
-    window.sim = { carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
+    window.sim = { needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
   } catch (e) {
     loading.textContent = `Could not start: ${e.message}`;
     console.error(e);

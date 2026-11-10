@@ -11,6 +11,18 @@
   1.5
  ],
  "encoding": "uint8, HU = v*10 - 1000, x fastest; axes: +x patient right, +y anterior, +z superior",
+ "labels": {
+  "0": "air",
+  "1": "soft tissue",
+  "2": "bone",
+  "3": "spinal canal",
+  "4": "artery",
+  "5": "vein",
+  "6": "bowel",
+  "7": "muscle",
+  "8": "kidney",
+  "9": "bladder/prostate"
+ },
  "landmarks": {
   "L2": [
    173.3,

@@ -35,7 +35,15 @@ button.toggle.on { background: var(--on); border-color: #2c9a57; }
 button.sel { border-color: var(--accent); color: #fff; }
 #readout { color: var(--muted); font-size: 12px; min-height: 16px; }
 #credit { color: #5d6b7a; font-size: 10px; }
-#dock.min .row:not(.main), #dock.min #readout, #dock.min #credit { display: none; }
+#dock.min .tab, #dock.min .tabs, #dock.min #readout, #dock.min #credit { display: none; }
+.tabs { display: flex; gap: 4px; }
+.tabs button { flex: 1; min-height: 30px; border-radius: 6px 6px 0 0; color: var(--muted); }
+.tabs button.sel { background: #33414f; color: #fff; border-color: var(--accent); }
+.tab { display: flex; flex-direction: column; gap: 5px; }
+.tab.hide { display: none; }
+#nread { color: var(--text); font-size: 12px; min-height: 16px; }
+#nread.bone { color: #ffb347; font-weight: 600; }
+button.toggle.on.arm { background: #8a6a12; border-color: #d0a52b; }
 
 #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
   padding: 20px; background: var(--bg); z-index: 20; font-size: 16px; }

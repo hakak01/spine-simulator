@@ -13,7 +13,32 @@ uniform sampler3D vol;
 uniform vec3 dims, spacing;          // voxels, mm per voxel
 uniform vec3 src, detC, detU, detV;  // tube, detector centre and half-axes (mm, volume frame)
 uniform float stepMM;
+uniform float nOn, nR, nMu;          // needle: on/off, radius (mm), attenuation relative to water
+uniform vec3 nTip, nHub, nHubEnd;    // shaft from tip to hub, plastic hub from nHub to nHubEnd
 in vec2 vUv; out vec4 outColor;
+
+// length of the ray inside a cylinder a-b of radius r
+float cylChord(vec3 ro, vec3 rd, vec3 a, vec3 b, float r) {
+  vec3 ba = b - a; float L = length(ba); vec3 ax = ba / L;
+  ro += rd * dot(0.5 * (a + b) - ro, rd);   // start near the cylinder (keeps float precision)
+  vec3 oc = ro - a;
+  float dax = dot(rd, ax), oax = dot(oc, ax);
+  vec3 dp = rd - dax * ax, op = oc - oax * ax;
+  float A = dot(dp, dp), B = dot(dp, op), C = dot(op, op) - r * r;
+  float t0 = -1e6, t1 = 1e6;
+  if (A < 1e-8) { if (C > 0.0) return 0.0; }
+  else {
+    float disc = B * B - A * C;
+    if (disc <= 0.0) return 0.0;
+    float sq = sqrt(disc);
+    t0 = (-B - sq) / A; t1 = (-B + sq) / A;
+  }
+  if (abs(dax) > 1e-6) {
+    float ta = -oax / dax, tb = (L - oax) / dax;
+    t0 = max(t0, min(ta, tb)); t1 = min(t1, max(ta, tb));
+  } else if (oax < 0.0 || oax > L) return 0.0;
+  return max(0.0, t1 - t0);
+}
 
 // relative linear attenuation (water = 1) at an effective energy of ~55 keV
 float muOf(float v) {
@@ -50,6 +75,10 @@ void main() {
     }
     sum *= stepMM;
   }
+  if (nOn > 0.5) {
+    sum += min(cylChord(src, d, nTip, nHub, nR) * nMu, 170.0);    // steel shaft
+    sum += cylChord(src, d, nHub, nHubEnd, 3.2) * 1.15;           // plastic hub
+  }
   outColor = pack(sum);  // water-equivalent path length, mm
 }`;
 
@@ -66,6 +95,9 @@ export class DRR {
         src: { value: new THREE.Vector3() }, detC: { value: new THREE.Vector3() },
         detU: { value: new THREE.Vector3() }, detV: { value: new THREE.Vector3() },
         stepMM: { value: 1.0 },
+        nOn: { value: 0 }, nR: { value: 0.36 }, nMu: { value: 90 },
+        nTip: { value: new THREE.Vector3() }, nHub: { value: new THREE.Vector3(0, 1, 0) },
+        nHubEnd: { value: new THREE.Vector3(0, 2, 0) },
       },
       depthTest: false, depthWrite: false,
     });
@@ -83,6 +115,18 @@ export class DRR {
       });
     }
     return this.targets[size];
+  }
+
+  // needle: null, or {tip, hub, hubEnd, radius} in volume mm
+  setNeedle(n, pixelMM = 0.27) {
+    const u = this.mat.uniforms;
+    u.nOn.value = n ? 1 : 0;
+    if (!n) return;
+    // keep a thin needle visible at low resolution: widen it, but keep the same total shadow
+    const r = Math.max(n.radius, 0.7 * pixelMM);
+    u.nR.value = r;
+    u.nMu.value = 90 * (n.radius / r) * (n.radius / r);
+    u.nTip.value.copy(n.tip); u.nHub.value.copy(n.hub); u.nHubEnd.value.copy(n.hubEnd);
   }
 
   // frame: {src, detC, detU, detV} in volume mm. Returns Float32Array of path sums (row 0 = bottom).

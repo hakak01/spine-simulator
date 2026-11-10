@@ -19,21 +19,41 @@
 </div>
 
 <div id="dock">
-  <div class="row">
-    <div class="grp"><span class="lbl">Oblique</span><button data-hold="obl-1">◄ R</button><button data-hold="obl1">L ►</button></div>
-    <div class="grp"><span class="lbl">Tilt</span><button data-hold="tilt1">▲ Cran</button><button data-hold="tilt-1">▼ Caud</button></div>
-    <div class="grp"><button data-act="AP">AP</button><button data-act="LAT">LAT</button><button data-act="OBLL">Obl L</button><button data-act="OBLR">Obl R</button></div>
+  <div class="tabs"><button data-tab="carm" class="sel">C-arm</button><button data-tab="needle">Needle</button></div>
+  <div class="tab" id="tab-carm">
+    <div class="row">
+      <div class="grp"><span class="lbl">Oblique</span><button data-hold="obl-1">◄ R</button><button data-hold="obl1">L ►</button></div>
+      <div class="grp"><span class="lbl">Tilt</span><button data-hold="tilt1">▲ Cran</button><button data-hold="tilt-1">▼ Caud</button></div>
+      <div class="grp"><button data-act="AP">AP</button><button data-act="LAT">LAT</button><button data-act="OBLL">Obl L</button><button data-act="OBLR">Obl R</button></div>
+    </div>
+    <div class="row">
+      <div class="grp pad"><span class="lbl">Move C-arm</span>
+        <button data-hold="panL">←</button><button data-hold="panU">↑</button><button data-hold="panD">↓</button><button data-hold="panR">→</button></div>
+      <div class="grp" id="levels"><span class="lbl">Go to</span></div>
+      <button id="flip" class="toggle">Flip L/R</button>
+    </div>
   </div>
-  <div class="row">
-    <div class="grp pad"><span class="lbl">Move C-arm</span>
-      <button data-hold="panL">←</button><button data-hold="panU">↑</button><button data-hold="panD">↓</button><button data-hold="panR">→</button></div>
-    <div class="grp" id="levels"><span class="lbl">Go to</span></div>
+  <div class="tab hide" id="tab-needle">
+    <div class="row">
+      <button id="n-place" class="toggle">Place on skin</button>
+      <button id="n-beam">Align to beam</button>
+      <button id="n-len">Needle 3.5 in</button>
+      <button id="n-remove">Remove</button>
+    </div>
+    <div class="row">
+      <div class="grp"><span class="lbl">Aim tip to</span>
+        <button data-tap="aimCr">Head</button><button data-tap="aimCa">Feet</button><button data-tap="aimL">Left</button><button data-tap="aimR">Right</button></div>
+    </div>
+    <div class="row">
+      <div class="grp"><span class="lbl">Withdraw</span><button data-tap="out5">−5</button><button data-tap="out1">−1</button></div>
+      <div class="grp"><span class="lbl">Advance</span><button data-tap="in1">+1</button><button data-tap="in5">+5</button><span class="lbl">mm</span></div>
+    </div>
+    <div id="nread">Tap "Place on skin", then tap the patient's back.</div>
   </div>
   <div class="row main">
     <button id="shot" class="big">● SHOT</button>
     <button id="live" class="toggle">LIVE</button>
     <button id="bones" class="toggle">Bones</button>
-    <button id="flip" class="toggle">Flip L/R</button>
     <button id="cam">Reset view</button>
     <button id="fold" title="Hide / show controls">▾ Less</button>
   </div>
