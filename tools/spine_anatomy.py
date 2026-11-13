@@ -127,7 +127,84 @@ def discs(lab, verts, pairs, yc):
         lab[disc] = DISC
 
 
-def build(lab, sac, verts, sp):
+def body_mask(vmask, yc):
+    """Vertebral body only: the part of the vertebra in front of the dural sac."""
+    ant = np.zeros(vmask.shape, bool)
+    for z in range(vmask.shape[2]):
+        ant[:, int(round(yc[z])) + 6:, z] = True
+    return vmask & ant
+
+
+def endplates(body, sp, footprint=None):
+    """Least-squares planes through the rim of the upper and lower endplates.
+    Returns {"sup"|"inf": {"c": centre mm, "n": unit normal pointing up (superior)}}."""
+    has = body.any(2)
+    if footprint is not None:                     # S1: only under the L5 body (not the sacral ala)
+        has &= footprint
+    xs, ys = np.nonzero(has)
+    mid = np.median(xs)
+    keep = np.abs(xs - mid) < 22 / sp[0]          # the body only (not the sacral ala)
+    xs, ys = xs[keep], ys[keep]
+    cx, cy = xs.mean(), ys.mean()
+    rx, ry = (xs.max() - xs.min()) / 2, (ys.max() - ys.min()) / 2
+    # The endplate looks "square" on fluoro when the beam runs along its rim (front, back and
+    # sides), so fit the plane to a ring near the edge of the body, not to the domed centre.
+    r = np.sqrt(((xs - cx) / rx) ** 2 + ((ys - cy) / ry) ** 2)
+    ring = (r > 0.55) & (r < 0.9)
+    xs, ys = xs[ring], ys[ring]
+    col = body[xs, ys, :]
+    nz = body.shape[2]
+    z_low = np.argmax(col, axis=1)
+    z_high = nz - 1 - np.argmax(col[:, ::-1], axis=1)
+    out = {}
+    for key, z in (("inf", z_low - 0.5), ("sup", z_high + 0.5)):
+        P = np.stack([xs * sp[0], ys * sp[1], z * sp[2]], 1)
+        keep = np.abs(P[:, 2] - np.median(P[:, 2])) < 8           # drop columns far off the endplate
+        for _ in range(4):                                         # robust fit: refit without outliers
+            A = np.c_[P[keep, 0], P[keep, 1], np.ones(keep.sum())]
+            (a, b, c), *_ = np.linalg.lstsq(A, P[keep, 2], rcond=None)
+            res = np.abs(P[:, 0] * a + P[:, 1] * b + c - P[:, 2])
+            keep = res < max(1.5, np.percentile(res[keep], 70))
+        P = P[keep]
+        n = np.array([-a, -b, 1.0]); n /= np.linalg.norm(n)
+        out[key] = {"c": P.mean(0).round(1).tolist(), "n": n.round(4).tolist()}
+    return out
+
+
+def posterior_wall(body, xc, sp):
+    """Posterior vertebral body line: y (mm) of the back of the body near the midline."""
+    zs = np.nonzero(body.any((0, 1)))[0]
+    vals = []
+    for z in zs:
+        x0 = int(round(xc[z]))
+        sl = body[x0 - 4:x0 + 5, :, z]
+        ys = np.nonzero(sl.any(0))[0]
+        if len(ys):
+            vals.append(ys.min())
+    return round(float(np.median(vals) * sp[1]), 1)
+
+
+def beam_vol(o, t):
+    """C-arm beam (tube -> detector) in CT voxel axes for oblique o (+ = detector toward the
+    patient's left) and tilt t (+ = cranial), patient prone. Tilt tilts the whole C; the oblique
+    (orbital) turn happens inside it, so a squared endplate stays square when obliquing."""
+    o, t = np.radians(o), np.radians(t)
+    return np.array([-np.sin(o), -np.cos(o) * np.cos(t), np.cos(o) * np.sin(t)])
+
+
+def clear_path(T, o, t, hard, inside, sp):
+    """Straight line from target T (mm) toward the detector, until it leaves the body: no bone?"""
+    v = beam_vol(o, t)
+    for s in np.arange(2.0, 200, 0.5):
+        i = tuple(np.round((T + v * s) / sp).astype(int))
+        if not inside[i]:
+            return True
+        if hard[i]:
+            return False
+    return True
+
+
+def build(lab, sac, verts, sp, hu=None):
     """lab: label volume (modified in place). verts: dict name -> mask (L3, L4, L5, S1)."""
     bone = lab == 2
     xc, yc, a = sac_axis(sac)
@@ -176,9 +253,55 @@ def build(lab, sac, verts, sp):
             lab[(peri | fbox) & np.isin(lab, SOFT)] = FOR
             lab[root] = ROOT
             out["roots"][v][s] = [(np.array(q) * sp).round(1).tolist() for q in pts]
-            # subpedicular ("safe triangle") point: just under the pedicle, 6 o'clock in AP
-            tgt = free_spot(bone, np.array((px + sg * 1.0, yc[z0] + 7.0, zb - 1.5)), 2)
-            out["targets"][v][s] = (tgt * sp).round(1).tolist()
+            out["targets"][v][s] = (p["c"], zb, yc[z0])   # filled in below, once all roots exist
+    # Subpedicular ("safe triangle") target: an open spot in the foramen just under the pedicle,
+    # 0-7 mm behind the posterior vertebral body line, that a straight "down the beam" needle can
+    # reach with the endplate squared and a 15-35 degree oblique (as seen on the oblique view, it
+    # sits under the pedicle, lateral to the superior articular process). Prefer room from bone
+    # and from the nerve root. The working C-arm range is stored as "approach".
+    dbone = ndimage.distance_transform_edt(~bone) * sp[0]
+    droot = ndimage.distance_transform_edt(lab != ROOT) * sp[0]
+    hard = bone & (hu > 180) if hu is not None else bone
+    inside = hu > -500 if hu is not None else lab > 0
+    out["approach"] = {}
+    for v in list(out["targets"]):
+        pw = posterior_wall(body_mask(verts[v], yc), xc, sp) / sp[1]   # posterior vertebral body line (voxels)
+        ep = endplates(body_mask(verts[v], yc), sp)["inf"]["n"]
+        tilt = min(np.arange(-45, 45.1, 0.5), key=lambda t: abs(np.dot(beam_vol(0, t), ep)))
+        out["approach"][v] = {}
+        for s_, (c, zb, ycz) in list(out["targets"][v].items()):
+            sg = SIDES[s_]                                   # -1 = patient left (smaller x)
+            cands = []
+            for z in range(int(zb) - 5, int(zb)):
+                for y in range(int(round(pw - 5)), int(round(pw + 1))):
+                    for dx in range(-1, 5):                  # from the 6 o'clock line to ~6 mm lateral
+                        x = int(round(c[0] + sg * dx))
+                        if lab[x, y, z] not in (FOR, EPI):
+                            continue
+                        room = min(dbone[x, y, z], droot[x, y, z] - 1.0)
+                        if room < 1.0:
+                            continue
+                        cands.append((room - 0.3 * (zb - z) - 0.15 * dx, (x, y, z)))
+            cands.sort(reverse=True)
+            best, rng = None, None
+            for score, q in cands[:60]:
+                ok = [o for o in np.arange(15, 35.1, 2.5) if clear_path(np.array(q) * sp, -sg * o, tilt, hard, inside, sp)]
+                if ok:
+                    best, rng = q, (min(ok), max(ok))
+                    break
+            if best is None:                                  # nothing reachable: keep the most open spot
+                best = cands[0][1]
+            out["targets"][v][s_] = (np.array(best) * sp).round(1).tolist()
+            out["approach"][v][s_] = {"tilt": float(tilt), "oblique": None if rng is None else [float(rng[0]), float(rng[1])]}
+
+    out["endplates"], out["posterior_wall_y"] = {}, {}
+    l5_foot = None
+    for v in ["L3", "L4", "L5", "S1"]:
+        body = body_mask(verts[v], yc)
+        out["endplates"][v] = endplates(body, sp, l5_foot if v == "S1" else None)
+        out["posterior_wall_y"][v] = posterior_wall(body, xc, sp)
+        if v == "L5":
+            l5_foot = ndimage.binary_erosion(body.any(2), iterations=2)
     out["sac_axis"] = {"z_mm": (np.arange(len(xc)) * sp[2]).round(1)[::4].tolist(),
                        "x_mm": (xc * sp[0]).round(1)[::4].tolist(), "y_mm": (yc * sp[1]).round(1)[::4].tolist(),
                        "half_width_mm": (a * sp[0]).round(1)[::4].tolist()}

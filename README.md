@@ -9,7 +9,7 @@ Practice fluoroscopy-guided spinal injections on a real CT scan, in a phone brow
 | 1 | Contrast injection with live fluoro: epidural/perineural, vascular, intrathecal, subdural, intradiscal (+ soft tissue); random vascular uptake | done |
 | 2 | DSA (bone subtraction) | skipped for now |
 | 3 | Decision after contrast: inject steroid / reposition / stop | skipped for now |
-| 4 | C-arm setup steps (square endplate, oblique, AP + lateral checks), sliders in VR | next |
+| 4 | C-arm setup steps (square endplate, oblique, AP + lateral checks), sliders in VR | done |
 | 5 | Case variety (levels, high iliac crest, S1 foramen, stenosis, scoliosis, obese) and subpedicular / infraneural approaches | |
 | 6 | Curved-tip needle with bevel steering, root contact = leg pain | |
 | 7 | Score sheet | |
@@ -44,12 +44,19 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 
 **Marker pen** (Mark tab): turn "Pen" on. Tap the skin: the pen rests there and its metal tip shows on the next C-arm image, so you can check it is over the target. "✕ Mark at pen tip" draws a cross under the tip. Drag on the skin to draw lines (two fingers still zoom and move the view). The violet ink does not show on the C-arm image. "Erase marks" clears the ink.
 
+**C-arm setup coach** (Setup tab): choose the root (L3, L4, L5) and side, and which endplate you square. "Centre on target" puts the C-arm on the foramen. Sliders set tilt, oblique and position along the spine. The checklist updates as you move:
+1. true AP of the target vertebra (spinous process midway between the pedicles),
+2. endplate square (degrees off, and which way to tilt),
+3. oblique toward the injection side until the straight "down the beam" path to the target under the pedicle is clear of bone (and whether the needle is long enough),
+4. after the needle is in: "AP check" and "Lateral check" swing the C-arm (keeping the tilt), take a shot, and report the tip: mm below the pedicle and lateral/medial to its 6 o'clock line; mm in front of/behind the posterior vertebral body line and which third of the foramen.
+
 **Quest 3:** press "Enter VR".
 - Left stick: rotate/tilt C-arm; hold the left trigger to move it instead. X: shot. Y: AP/LAT. A: live. B: bones.
 - Grip: pick up the needle from the tray. Push it into the back like a real needle. It pivots at the skin entry point, and deep tissue makes it stiff. The controller buzzes on bone.
 - Let go and the needle stays in. Then the right stick advances or withdraws it slowly. Grip near the hub to take it again; pull back to take it out.
 - Right trigger: inject contrast. Right stick click: hide/show contrast. Left stick click: clear contrast.
 - Marker pen: it lies on the tray next to the needle. Hold grip near it to pick it up. Touch the back to draw (light buzz); it slides on the skin and does not go in. Let go while it touches the skin and it stays standing there; take a shot to see its metal tip.
+- C-arm setup panel to the left of the C-arm screen (it moves with the screen): root and side buttons, sliders for tilt, oblique and position (point and hold the trigger, then move), CENTRE, AP CHECK, LAT CHECK, SHOT, endplate choice, and the same live checklist.
 - EXIT VR and ERASE INK buttons are under the C-arm screen and on your left wrist. Point with the controller and pull the trigger; for EXIT VR press twice (the first press shows "PRESS AGAIN").
 - Point at the screen and hold grip to move the screen.
 
@@ -82,6 +89,14 @@ Contrast spreads through the matching space over time (a shortest-path flood thr
 For comparison, a prospective study found intravascular spread in 8.1 % of lumbar and 21.3 % of S1 transforaminal injections (Furman MB et al. *Spine* 2000;25:2628-32, doi:10.1097/00007632-200010150-00014). The trainer uses higher rates on purpose.
 
 The CT does not show nerve roots, so `tools/spine_anatomy.py` builds them: discs (between vertebral bodies), epidural space (4.5 mm ring round the dural sac), foramina (below each pedicle) and the exiting L3, L4 and L5 roots (round the lower border of the pedicle, through the upper foramen, then down and out toward the psoas).
+
+## How the setup coach measures
+
+- Endplates: a plane is fitted to the rim of each vertebral body's upper and lower endplate on the CT (the rim is what makes the endplate look like one line on fluoro). "Square" = the beam is within 1.5° of that plane.
+- C-arm movement: the cranio-caudal tilt tilts the whole C and the oblique turns inside it, like a mobile C-arm, so a squared endplate stays (nearly) square when you oblique.
+- True AP: the beam is perpendicular to the line joining the two pedicles of the target vertebra (within 2°).
+- Target ("safe triangle", subpedicular): an open spot in the foramen 1.5-7.5 mm under the pedicle and 0-7 mm behind the posterior vertebral body line that a straight down-the-beam needle can reach with the endplate squared at a 15-35° oblique. On this CT it lies 3-6 mm lateral to the AP 6 o'clock line.
+- Path check: the straight line from the target back along the beam to the skin must not pass through bone.
 
 ## Data and credits
 

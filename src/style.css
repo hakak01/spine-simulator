@@ -64,3 +64,13 @@ button.inj:active { background: #2f6d95; }
 #cread { font-size: 12px; min-height: 16px; color: var(--text); }
 #cread.ok { color: #6fdc8c; }
 #cread.bad { color: #ff8a7a; }
+
+.sliders { display: flex; flex-direction: column; gap: 2px; }
+.sliders label { display: grid; grid-template-columns: 82px 1fr 92px; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.sliders input[type=range] { width: 100%; accent-color: var(--accent); height: 26px; }
+.sliders b { color: var(--text); font-weight: 600; font-size: 12px; }
+select { background: #26303b; color: var(--text); border: 1px solid var(--line); border-radius: 6px; min-height: 32px; font: inherit; font-size: 12px; }
+#s-list { list-style: none; margin: 0; padding: 0; font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
+#s-list li { padding-left: 18px; text-indent: -18px; }
+#s-list li.ok { color: #6fdc8c; }
+#s-list li.bad { color: #ffb36b; }

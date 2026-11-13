@@ -93,7 +93,7 @@ def body_mask(hu):
 def save_mesh(path, verts, faces):
     verts = np.ascontiguousarray(verts, dtype=np.float32)
     faces = np.ascontiguousarray(faces, dtype=np.uint32)
-    with gzip.open(path, "wb", compresslevel=9) as f:
+    with gzip.GzipFile(path, "wb", compresslevel=9, mtime=0) as f:
         f.write(struct.pack("<II", len(verts), len(faces)))
         f.write(verts.tobytes())
         f.write(faces.tobytes())
@@ -143,7 +143,7 @@ def main():
     print("crop dims", dims, "spacing", sp)
 
     u8 = np.clip(np.round((hu + 1000.0) / 10.0), 0, 255).astype(np.uint8)
-    with gzip.open(os.path.join(OUT, "ct_u8.bin.gz"), "wb", compresslevel=9) as f:
+    with gzip.GzipFile(os.path.join(OUT, "ct_u8.bin.gz"), "wb", compresslevel=9, mtime=0) as f:
         f.write(np.ascontiguousarray(u8.transpose(2, 1, 0)).tobytes())  # x fastest
     print(f"  ct_u8.bin.gz: {os.path.getsize(os.path.join(OUT, 'ct_u8.bin.gz'))/1e6:.1f} MB")
 
@@ -174,8 +174,8 @@ def main():
     lab[ndimage.binary_dilation(seg_bone, iterations=1) & (hu > 130)] = 2
     # discs, epidural space, foramina, exiting nerve roots (see tools/spine_anatomy.py)
     verts = {v: load("vertebrae_" + v)[sl] for v in ["L2", "L3", "L4", "L5", "S1"]}
-    anatomy = spine_anatomy.build(lab, load("spinal_cord")[sl] & body, verts, sp)
-    with gzip.open(os.path.join(OUT, "labels_u8.bin.gz"), "wb", compresslevel=9) as f:
+    anatomy = spine_anatomy.build(lab, load("spinal_cord")[sl] & body, verts, sp, hu)
+    with gzip.GzipFile(os.path.join(OUT, "labels_u8.bin.gz"), "wb", compresslevel=9, mtime=0) as f:
         f.write(np.ascontiguousarray(lab.transpose(2, 1, 0)).tobytes())
     print(f"  labels_u8.bin.gz: {os.path.getsize(os.path.join(OUT, 'labels_u8.bin.gz'))/1e6:.2f} MB")
 

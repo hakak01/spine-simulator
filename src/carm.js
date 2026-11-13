@@ -16,8 +16,10 @@ export class CArm {
     this.model = buildModel(this);
   }
 
+  // Like a mobile C-arm: the cranio-caudal tilt tilts the whole C, and the oblique (orbital)
+  // turn happens inside the tilted C. So a squared endplate stays square when you oblique.
   rotation() {
-    return new THREE.Quaternion().setFromEuler(new THREE.Euler(this.obl * DEG, 0, this.tilt * DEG, 'XYZ'));
+    return new THREE.Quaternion().setFromEuler(new THREE.Euler(this.obl * DEG, 0, this.tilt * DEG, 'ZYX'));
   }
 
   // beam direction, tube -> detector

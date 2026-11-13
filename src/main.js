@@ -6,6 +6,7 @@ import { setupXR } from './xr.js';
 import { Tissue, Needle } from './needle.js';
 import { Contrast, PATTERNS } from './contrast.js';
 import { Pen } from './pen.js';
+import { Setup } from './setup.js';
 
 const $ = (id) => document.getElementById(id);
 const loading = $('loading');
@@ -71,7 +72,7 @@ scene.add(carm.model);
 
 // ---------- state ----------
 const state = { answer: true, lastLive: 0, k: 0.012, shots: 0, liveSec: 0, live: false, bones: false, preset: 'AP', level: 'L4-5', dirty: false, lastMove: 0, hq: true };
-let drr, volToWorld, worldToVol, levels = {}, xr = null, needle = null, skinMesh = null, contrast = null, pen = null;
+let drr, volToWorld, worldToVol, levels = {}, xr = null, needle = null, skinMesh = null, contrast = null, pen = null, setup = null;
 const fcanvas = $('fluoro');
 const fctx = fcanvas.getContext('2d');
 const off = document.createElement('canvas');
@@ -137,6 +138,7 @@ function shot() {
 // ---------- C-arm movement ----------
 function changed() {
   carm.updateModel();
+  state.setupDirty = true;
   state.lastMove = performance.now();
   if (state.live) { state.dirty = true; state.hq = false; }
   readout();
@@ -163,6 +165,7 @@ function setPreset(p) {
 function goLevel(name) {
   state.level = name;
   carm.iso.copy(levels[name]);
+  setupBase.copy(carm.iso);
   document.querySelectorAll('#levels button').forEach((b) => b.classList.toggle('sel', b.dataset.level === name));
   changed();
 }
@@ -253,7 +256,64 @@ $('c-answer').addEventListener('click', () => {
   makeImage(512, 0.75);
 });
 
+// ---------- C-arm setup coach ----------
+const setupBase = new THREE.Vector3();
+function setupCentre() {
+  if (!setup) return;
+  setup.centre();
+  setupBase.copy(carm.iso);
+  changed();
+}
+function setupCheck(view) { // swing to AP or lateral, keep the tilt, take a shot
+  carm.obl = view === 'AP' ? 0 : -90;
+  changed();
+  shot();
+}
+function setRoot(r) {
+  setup.root = r;
+  document.querySelectorAll('[data-root]').forEach((b) => b.classList.toggle('sel', b.dataset.root === r));
+  setupCentre();
+}
+function setSide(sd) {
+  setup.side = sd;
+  document.querySelectorAll('[data-side]').forEach((b) => b.classList.toggle('sel', b.dataset.side === sd));
+  setupCentre();
+}
+function setPlate(p) { setup.plate = p; $('s-plate').value = p; state.setupDirty = true; }
+function setTilt(v) { carm.tilt = Math.max(-45, Math.min(45, v)); changed(); }
+function setObl(v) { carm.obl = Math.max(-95, Math.min(95, v)); changed(); }
+function setAlong(mm) { carm.iso.x = setupBase.x - mm / 1000; changed(); }   // + = toward the head
+function along() { return (setupBase.x - carm.iso.x) * 1000; }
+function setupRefresh() {
+  state.setupDirty = false;
+  if (!setup) return;
+  const fmt = (v, pos, neg) => (Math.abs(v) < 0.25 ? '0°' : `${Math.abs(v).toFixed(1)}° ${v > 0 ? pos : neg}`);
+  $('sl-tilt').value = carm.tilt; $('sv-tilt').textContent = fmt(carm.tilt, 'cran', 'caud');
+  $('sl-obl').value = carm.obl; $('sv-obl').textContent = fmt(carm.obl, 'L', 'R');
+  const a = along();
+  $('sl-pos').value = a; $('sv-pos').textContent = `${Math.abs(a).toFixed(0)} mm ${a >= 0 ? 'head' : 'feet'}`;
+  const list = setup.lines();
+  $('s-list').innerHTML = '';
+  for (const l of list) {
+    const li = document.createElement('li');
+    li.className = l.ok === true ? 'ok' : l.ok === false ? 'bad' : '';
+    li.textContent = `${l.ok === true ? '✓ ' : l.ok === false ? '✗ ' : '• '}${l.text}`;
+    $('s-list').appendChild(li);
+  }
+  if (xr && xr.setupChanged) xr.setupChanged(list);
+}
+document.querySelectorAll('[data-root]').forEach((b) => b.addEventListener('click', () => setRoot(b.dataset.root)));
+document.querySelectorAll('[data-side]').forEach((b) => b.addEventListener('click', () => setSide(b.dataset.side)));
+$('s-plate').addEventListener('change', (e) => setPlate(e.target.value));
+$('s-centre').addEventListener('click', setupCentre);
+$('s-ap').addEventListener('click', () => setupCheck('AP'));
+$('s-lat').addEventListener('click', () => setupCheck('LAT'));
+$('sl-tilt').addEventListener('input', (e) => setTilt(+e.target.value));
+$('sl-obl').addEventListener('input', (e) => setObl(+e.target.value));
+$('sl-pos').addEventListener('input', (e) => setAlong(+e.target.value));
+
 function needleChanged() {
+  state.setupDirty = true;
   state.lastMove = performance.now();
   if (state.live) { state.dirty = true; state.hq = false; }
   needleReadout();
@@ -340,7 +400,7 @@ $('n-len').addEventListener('click', () => {
 });
 document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
   document.querySelectorAll('.tabs button').forEach((o) => o.classList.toggle('sel', o === b));
-  ['carm', 'needle', 'mark'].forEach((t) => $(`tab-${t}`).classList.toggle('hide', b.dataset.tab !== t));
+  ['carm', 'needle', 'mark', 'setup'].forEach((t) => $(`tab-${t}`).classList.toggle('hide', b.dataset.tab !== t));
   if (b.dataset.tab !== 'needle') setPlacing(false);
   if (b.dataset.tab !== 'mark') setPenMode(false);
 }));
@@ -521,6 +581,7 @@ function tick() {
   last = now;
   held.forEach((k) => HOLD[k](dt));
   heldTap.forEach((k) => TAP[k][1](dt));
+  if (state.setupDirty && now - (state.lastSetup || 0) > 120) { state.lastSetup = now; setupRefresh(); }
   if (xr) xr.update(dt);
   if (contrast && contrast.anim) { // contrast injection: live fluoro until it settles
     contrast.update(dt);
@@ -577,6 +638,7 @@ async function start() {
     needle.onBone = boneFeedback;
     needle.onChange = needleChanged;
     contrast = new Contrast(needle.tissue, meta);
+    setup = new Setup(meta.anatomy, needle.tissue, carm, needle, volToWorld, worldToVol);
     pen = new Pen(needle.tissue);
     pen.onChange = penMoved;
     scene.add(pen.model, pen.ink);
@@ -597,6 +659,7 @@ async function start() {
 
     drr = new DRR(renderer, tex, meta);
     goLevel('L4-5');
+    setupBase.copy(carm.iso);
     setCamera();
     shot();
     state.shots = 0;
@@ -604,12 +667,13 @@ async function start() {
     xr = await setupXR(renderer, scene, {
       canvas: fcanvas, shot, moveCArm, panCArm, toggleLive, toggleBones, needle,
       injectContrast, toggleHideContrast, clearContrast, pen,
+      carm, setup, setRoot, setSide, setPlate, setTilt, setObl, setAlong, along, setupCentre, setupCheck,
       tray: new THREE.Vector3(0.38, TABLE_TOP + 0.03, MIDLINE_Z + 0.36),
       togglePreset: () => setPreset(state.preset === 'AP' ? 'LAT' : 'AP'),
       onXR: () => {},
     });
     loading.classList.add('hide');
-    window.sim = { xr, pen, setPenMode, skinHit, contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
+    window.sim = { setup, setupCentre, setupCheck, setRoot, setSide, setTilt, setObl, setAlong, xr, pen, setPenMode, skinHit, contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
   } catch (e) {
     loading.textContent = `Could not start: ${e.message}`;
     console.error(e);

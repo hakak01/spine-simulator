@@ -19,7 +19,7 @@
 </div>
 
 <div id="dock">
-  <div class="tabs"><button data-tab="carm" class="sel">C-arm</button><button data-tab="needle">Needle</button><button data-tab="mark">Mark</button></div>
+  <div class="tabs"><button data-tab="carm" class="sel">C-arm</button><button data-tab="needle">Needle</button><button data-tab="mark">Mark</button><button data-tab="setup">Setup</button></div>
   <div class="tab" id="tab-carm">
     <div class="row">
       <div class="grp"><span class="lbl">Oblique</span><button data-hold="obl-1">◄ R</button><button data-hold="obl1">L ►</button></div>
@@ -65,6 +65,24 @@
       <button id="p-away">Put pen away</button>
     </div>
     <div id="pread">Turn the pen on. Tap the skin to rest its metal tip there (it shows on the C-arm image). Drag on the skin to draw.</div>
+  </div>
+  <div class="tab hide" id="tab-setup">
+    <div class="row">
+      <div class="grp"><span class="lbl">Root</span><button data-root="L3">L3</button><button data-root="L4" class="sel">L4</button><button data-root="L5">L5</button></div>
+      <div class="grp"><span class="lbl">Side</span><button data-side="L" class="sel">Left</button><button data-side="R">Right</button></div>
+      <div class="grp"><span class="lbl">Square</span><select id="s-plate">
+        <option value="upper">upper vertebra, lower endplate</option>
+        <option value="lower">lower vertebra, upper endplate</option></select></div>
+    </div>
+    <div class="row">
+      <button id="s-centre">Centre on target</button><button id="s-ap">AP check</button><button id="s-lat">Lateral check</button>
+    </div>
+    <div class="sliders">
+      <label><span>Tilt</span><input type="range" id="sl-tilt" min="-45" max="45" step="0.5"><b id="sv-tilt"></b></label>
+      <label><span>Oblique</span><input type="range" id="sl-obl" min="-95" max="95" step="0.5"><b id="sv-obl"></b></label>
+      <label><span>Along spine</span><input type="range" id="sl-pos" min="-100" max="100" step="1"><b id="sv-pos"></b></label>
+    </div>
+    <ul id="s-list"></ul>
   </div>
   <div class="row main">
     <button id="shot" class="big">● SHOT</button>

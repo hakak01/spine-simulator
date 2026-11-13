@@ -2,6 +2,7 @@
 // marker pen, and in-VR buttons (EXIT VR, ERASE INK).
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/VRButton.js';
+import { VRPanel } from './vrpanel.js';
 
 const HAND_OFFSET = 0.03; // needle hub sits this far in front of the controller (m)
 const PEN_REACH = 0.075;  // pen tip this far in front of the controller (m)
@@ -62,7 +63,7 @@ export async function setupXR(renderer, scene, ctx) {
     'RIGHT TRIGGER: inject contrast (1 mL, live fluoro)',
     'Right stick click: hide / show contrast   Left stick click: clear it',
     'PEN on the tray: grip near it, touch the skin to draw (metal tip shows)',
-    'Point at this screen + hold GRIP: move it. Buttons: point + TRIGGER',
+    'Screen: point + hold GRIP to move it. Buttons + setup sliders: point + TRIGGER',
   ].forEach((t, i) => hctx.fillText(t, 20, 40 + i * 43));
   const helpTex = new THREE.CanvasTexture(help);
   helpTex.colorSpace = THREE.SRGBColorSpace;
@@ -100,6 +101,33 @@ export async function setupXR(renderer, scene, ctx) {
       pen.clearInk();
     }
   }
+
+  // ----- C-arm setup panel (left of the screen; moves with it) -----
+  const panel = new VRPanel(768, 1180, 0.4);
+  panel.title = 'C-ARM SETUP  (transforaminal)';
+  const fmtDeg = (pos, neg) => (v) => (Math.abs(v) < 0.25 ? '0°' : `${Math.abs(v).toFixed(1)}° ${v > 0 ? pos : neg}`);
+  ['L3', 'L4', 'L5'].forEach((r, i) => panel.button(`root${r}`, 24 + i * 112, 72, 100, 62, `${r} root`, () => ctx.setRoot(r), () => ctx.setup.root === r));
+  panel.button('sideL', 400, 72, 160, 62, 'LEFT', () => ctx.setSide('L'), () => ctx.setup.side === 'L');
+  panel.button('sideR', 580, 72, 160, 62, 'RIGHT', () => ctx.setSide('R'), () => ctx.setup.side === 'R');
+  panel.slider('tilt', 50, 200, 668, 50, 'Tilt', -45, 45, () => ctx.carm.tilt, (v) => ctx.setTilt(Math.round(v * 2) / 2), fmtDeg('cranial', 'caudal'));
+  panel.slider('obl', 50, 310, 668, 50, 'Oblique', -95, 95, () => ctx.carm.obl, (v) => ctx.setObl(Math.round(v * 2) / 2), fmtDeg('left', 'right'));
+  panel.slider('pos', 50, 420, 668, 50, 'Along the spine', -100, 100, () => ctx.along(), (v) => ctx.setAlong(Math.round(v)),
+    (v) => `${Math.abs(v).toFixed(0)} mm ${v >= 0 ? 'head' : 'feet'}`);
+  panel.button('centre', 24, 500, 170, 70, 'CENTRE', () => ctx.setupCentre());
+  panel.button('apcheck', 208, 500, 170, 70, 'AP CHECK', () => ctx.setupCheck('AP'));
+  panel.button('latcheck', 392, 500, 170, 70, 'LAT CHECK', () => ctx.setupCheck('LAT'));
+  panel.button('shot', 576, 500, 168, 70, 'SHOT', () => ctx.shot());
+  panel.button('plate', 24, 584, 720, 56, '', () => ctx.setPlate(ctx.setup.plate === 'upper' ? 'lower' : 'upper'));
+  const plateBtn = panel.widgets.find((k) => k.id === 'plate');
+  panel.textTop = 690;
+  const redrawPanel = () => {
+    plateBtn.label = ctx.setup.plate === 'upper' ? 'SQUARE: lower endplate of upper vertebra' : 'SQUARE: upper endplate of lower vertebra';
+    panel.draw();
+  };
+  panel.mesh.position.set(-0.5, -0.12, 0.04);
+  panel.mesh.rotation.y = 0.35;
+  monitor.add(panel.mesh);
+  redrawPanel();
 
   // ----- marker pen -----
   const pen = ctx.pen;
@@ -161,7 +189,8 @@ export async function setupXR(renderer, scene, ctx) {
   const pos = new THREE.Vector3(), fwd = new THREE.Vector3(), H = new THREE.Vector3();
   const v = new THREE.Vector3(), p = new THREE.Vector3(), nd = new THREE.Vector3();
   const grabOff = new THREE.Vector3();
-  let grabbedBy = null, heldNeedle = null, heldPen = null, lastTick = 0;
+  let grabbedBy = null, heldNeedle = null, heldPen = null, lastTick = 0, sliding = null;
+  const plane = new THREE.Plane(), hitP = new THREE.Vector3(), nrm = new THREE.Vector3();
   const dz = (x) => (Math.abs(x) < 0.15 ? 0 : x);
 
   function pose(c) {
@@ -225,20 +254,39 @@ export async function setupXR(renderer, scene, ctx) {
     if (act && act.pulse) act.pulse(strength, ms).catch(() => {});
   }
 
-  // which in-VR button (if any) is this controller pointing at?
+  // which in-VR button / panel widget (if any) is this controller pointing at?
   function pointedButton() {
     ray.ray.origin.copy(pos); ray.ray.direction.copy(fwd);
+    let best = null;
     for (const b of bars) {
       if (!b.mesh.parent || !b.mesh.visible) continue;
       const h = ray.intersectObject(b.mesh, false)[0];
-      if (h && h.distance < 3) return { bar: b, id: b.at(h.uv), dist: h.distance };
+      if (h && h.distance < 3 && (!best || h.distance < best.dist)) best = { bar: b, id: b.at(h.uv), dist: h.distance };
     }
-    return null;
+    const h = ray.intersectObject(panel.mesh, false)[0];
+    if (h && h.distance < 3 && (!best || h.distance < best.dist)) {
+      const k = panel.at(h.uv);
+      best = { panel: true, k, uv: h.uv, dist: h.distance };
+    }
+    return best;
+  }
+
+  // uv on the panel plane where the ray points (also outside the panel, for dragging)
+  function panelUV() {
+    panel.mesh.updateMatrixWorld();
+    nrm.set(0, 0, 1).transformDirection(panel.mesh.matrixWorld);
+    plane.setFromNormalAndCoplanarPoint(nrm, hitP.setFromMatrixPosition(panel.mesh.matrixWorld));
+    ray.ray.origin.copy(pos); ray.ray.direction.copy(fwd);
+    if (!ray.ray.intersectPlane(plane, hitP)) return null;
+    const loc = panel.mesh.worldToLocal(hitP.clone());
+    const g = panel.mesh.geometry.parameters;
+    return { x: loc.x / g.width + 0.5, y: loc.y / g.height + 0.5 };
   }
 
   function update(dt) {
     if (!renderer.xr.isPresenting) return;
     const hovers = new Map();
+    let panelHover = sliding ? sliding.k.id : null;
     for (const c of ctrls) {
       const src = c.userData.source;
       if (!src || !src.gamepad) continue;
@@ -252,9 +300,21 @@ export async function setupXR(renderer, scene, ctx) {
       const pb = heldNeedle === c || heldPen === c ? null : pointedButton();
       c.userData.line.material.color.set(pb ? 0xffe066 : 0x88ccff);
       c.userData.line.material.opacity = pb ? 0.9 : 0.35;
+      if (sliding && sliding.c === c) {                       // dragging a slider
+        if (!pressed[0]) sliding = null;
+        else { const uv = panelUV(); if (uv) panel.drag(sliding.k, uv); }
+      }
       if (pb) {
-        hovers.set(pb.bar, pb.id);
-        if (edge(0)) press(pb.id);
+        if (pb.panel) {
+          panelHover = pb.k ? pb.k.id : null;
+          if (edge(0) && pb.k) {
+            if (pb.k.type === 'button') pb.k.onClick();
+            else { sliding = { c, k: pb.k }; panel.drag(pb.k, pb.uv); }
+          }
+        } else {
+          hovers.set(pb.bar, pb.id);
+          if (edge(0)) press(pb.id);
+        }
         const e0 = edge; edge = (i) => (i === 0 ? false : e0(i));
       }
       if (src.handedness === 'left') {
@@ -296,6 +356,7 @@ export async function setupXR(renderer, scene, ctx) {
       const h = hovers.get(b) || null;
       if (h !== b.hover) { b.hover = h; b.draw(); }
     }
+    if (panelHover !== panel.hover) { panel.hover = panelHover; redrawPanel(); }
   }
 
   function buzz(strength, ms) {
@@ -307,5 +368,6 @@ export async function setupXR(renderer, scene, ctx) {
     }
   }
 
-  return { update, buzz, onImage: () => { tex.needsUpdate = true; }, monitor, monBar, wristBar };
+  const setupChanged = (lines) => { panel.lines = lines; redrawPanel(); };
+  return { update, buzz, setupChanged, onImage: () => { tex.needsUpdate = true; }, monitor, monBar, wristBar, panel };
 }
