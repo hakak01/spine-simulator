@@ -11,7 +11,7 @@ Practice fluoroscopy-guided spinal injections on a real CT scan, in a phone brow
 | 3 | Decision after contrast: inject steroid / reposition / stop | skipped for now |
 | 4 | C-arm setup steps (square endplate, oblique, AP + lateral checks), sliders in VR | done |
 | 5 | Case variety (levels, high iliac crest, S1 foramen, stenosis, scoliosis, obese) and subpedicular / infraneural approaches | paused (plan: extra real CTs + changes to this CT) |
-| 6 | Curved-tip needle steered by turning the hub | done (bone vibration and leg pain left as they are, as asked) |
+| 6 | Needle movement per docs/needle-rules.md: free pivot under 15 mm, hub lean + shaft bend at depth, bevel drift (bent tip x2.5), back to skin | done (bone vibration and leg pain unchanged) |
 | 7 | Score sheet | |
 | 8 | Random case mode (answer hidden until debrief) | |
 | 9 | Show ideal needle placement | |
@@ -34,7 +34,12 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 
 **Needle on the phone** (Needle tab):
 - "Place on skin", then tap the patient's back. The needle starts in line with the C-arm beam.
-- "Aim tip to" Head / Feet / Left / Right: 1° per tap, hold to keep turning. The needle pivots at the skin. When the tip is deeper than 15 mm, tissue holds the needle, so angle changes are small: withdraw to redirect.
+- The needle follows `docs/needle-rules.md` (like a 22 G Quincke spinal needle in soft tissue):
+  - Under 15 mm deep, "Aim toward" Head / Feet / Left / Right re-aims the whole needle, 1° per tap.
+  - Deeper, the tissue holds the shaft: the arrows only lean the hub (the outside part bends). The lean is limited (about 20° at 15 mm, 10° at 30 mm, 7° at 45 mm); pushing past it gives a message. The tip turns a little toward the hub, and only while you advance.
+  - Every needle drifts away from the bevel while advancing: about 3 mm at 40 mm and 9 mm at 80 mm for a straight needle; "Bent tip" drifts 2.5 x more. The yellow notch on the hub marks the bevel; the readout gives the notch o'clock and the side it drifts to.
+  - "Turn hub ⟲ / ⟳" turns the hub one clock hour per tap. A turn of 30° or more restarts the early drift "kick".
+  - Big redirects need withdrawal: "Back to skin" withdraws to 6 mm, and under 15 mm the needle is free to re-aim again.
 - Advance / Withdraw: 1 mm or 5 mm per tap; hold ±1 to keep moving.
 - The needle stops on bone. You get a short vibration (Android) and a soft tick sound. iPhone browsers do not support vibration.
 - "Curved tip: ON" gives the needle a bent tip. As it advances through soft tissue it drifts toward its curve (about 0.35° per mm: ~3 mm over 30 mm). "Turn hub ⟲ / ⟳" turns the hub 45° per tap (hold to keep turning); the yellow notch on the hub and the readout show where the curve points. Withdrawing follows the same track back; turning the hub only changes the path from there on.
@@ -53,9 +58,11 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 
 **Quest 3:** press "Enter VR".
 - Left stick: rotate/tilt C-arm; hold the left trigger to move it instead. X: shot. Y: AP/LAT. A: live. B: bones.
-- Grip: pick up the needle from the tray. Push it into the back like a real needle. It pivots at the skin entry point, and deep tissue makes it stiff. The controller buzzes on bone.
-- Curved tip: point at CURVE: OFF/ON (under the C-arm screen or on the left wrist) and pull the trigger. While holding the needle, twist your wrist to turn the hub; the yellow notch shows where the curve points.
-- Let go and the needle stays in. Then the right stick advances or withdraws it slowly. Grip near the hub to take it again; pull back to take it out.
+- Grip: hold the needle (pick it up from the tray). Touch the back with the tip to enter there.
+- Right stick up/down: advance / withdraw (gentle push = slow). Right stick left/right: turn the hub (any needle).
+- Under 15 mm your hand re-aims the whole needle. Deeper, your hand only leans the hub and bends the shaft (up to the limit, with a buzz and a message above the screen); withdraw to redirect.
+- Buttons under the C-arm screen and on the left wrist: BENT TIP on/off, BACK TO SKIN.
+- Let go and the needle stays in; the bend springs back to straight. Grip near the hub to take it again. To take it out: withdraw to the skin, then pull your hand back.
 - Right trigger: inject contrast. Right stick click: hide/show contrast. Left stick click: clear contrast.
 - Marker pen: it lies on the tray next to the needle. Hold grip near it to pick it up. Touch the back to draw (light buzz); it slides on the skin and does not go in. Let go while it touches the skin and it stays standing there; take a shot to see its metal tip.
 - C-arm setup panel to the left of the C-arm screen (it moves with the screen): root and side buttons, sliders for tilt, oblique and position (point and hold the trigger, then move), CENTRE, AP CHECK, LAT CHECK, SHOT, endplate choice, and the same live checklist.
@@ -72,33 +79,15 @@ Limits: the CT has 1.5 mm voxels, so the image is a little softer than a real C-
 
 The needle is a 22G spinal needle (0.7 mm). Bone is found from the CT (above 180 HU inside the segmented bones), so the needle stops where the real bone surface is. The needle is drawn into the C-arm image as a steel cylinder with a plastic hub, so a needle in line with the beam shows as a dot inside the hub ring ("hub view").
 
-The needle's track through tissue is stored, so a curved-tip needle shows its bend on the C-arm image (drawn as up to 8 straight pieces). A straight needle has no bevel drift. It passes through soft organs without warning. Complications and contrast come in steps 3 and 4.
+The needle's track through tissue and its tip direction are stored at every 0.25 mm, so drift and bends show on the C-arm image (up to 8 straight pieces). It passes through soft organs without warning.
 
-## How contrast works
+Honesty note: the drift numbers come from bench studies (gel, meat, pig muscle), not living patients. The 15 mm cut-off, the lean limits and the steering at depth are estimates; no study measures them. They are named constants (`RULES` in `src/needle.js`) so they can be tuned.
 
-The tip position decides the pattern, using the tissue map:
-
-| Tip in | Pattern |
-|---|---|
-| foramen / epidural space (or within 1.5 mm of it) | epidural / perineural: contrast tracks along the root sleeve and into the epidural space |
-| foramen, but random vascular uptake (20 % lumbar, 40 % S1, rolled once per tip position) | vascular: fast streak (radicular artery with hairpin into the anterior spinal artery, or epidural veins), gone in < 1 s |
-| dural sac, outer 1.5 mm | subdural: thin, one-sided, long cranio-caudal line |
-| dural sac, deeper | intrathecal: myelogram, pools anteriorly (dependent when prone) |
-| disc | intradiscal: nucleogram |
-| muscle / soft tissue | soft tissue: patchy streaks |
-
-Contrast spreads through the matching space over time (a shortest-path flood through the tissue map, 1 mL), is smoothed, and is drawn into the C-arm image like the CT.
-For comparison, a prospective study found intravascular spread in 8.1 % of lumbar and 21.3 % of S1 transforaminal injections (Furman MB et al. *Spine* 2000;25:2628-32, doi:10.1097/00007632-200010150-00014). The trainer uses higher rates on purpose.
-
-The CT does not show nerve roots, so `tools/spine_anatomy.py` builds them: discs (between vertebral bodies), epidural space (4.5 mm ring round the dural sac), foramina (below each pedicle) and the exiting L3, L4 and L5 roots (round the lower border of the pedicle, through the upper foramen, then down and out toward the psoas).
-
-## How the setup coach measures
-
-- Endplates: a plane is fitted to the rim of each vertebral body's upper and lower endplate on the CT (the rim is what makes the endplate look like one line on fluoro). "Square" = the beam is within 1.5° of that plane.
-- C-arm movement: the cranio-caudal tilt tilts the whole C and the oblique turns inside it, like a mobile C-arm, so a squared endplate stays (nearly) square when you oblique.
-- True AP: the beam is perpendicular to the line joining the two pedicles of the target vertebra (within 2°).
-- Target ("safe triangle", subpedicular): an open spot in the foramen 1.5-7.5 mm under the pedicle and 0-7 mm behind the posterior vertebral body line that a straight down-the-beam needle can reach with the endplate squared at a 15-35° oblique. On this CT it lies 3-6 mm lateral to the AP 6 o'clock line.
-- Path check: the straight line from the target back along the beam to the skin must not pass through bone.
+Needle sources (from `docs/needle-rules.md`):
+- Rand et al. Comparison of spinal needle deflection in a ballistic gel model. Anesth Pain Med 2016;6(5). doi:10.5812/aapm.36607
+- Drummond & Scott. Deflection of spinal needles by the bevel. Anaesthesia 1980;35(9):854-7
+- Sitzman & Uncles. The effects of needle type, gauge, and tip bend on spinal needle deflection. Anesth Analg 1996;82(2):297-301
+- Webster et al. Nonholonomic modeling of needle steering. Int J Robot Res 2006
 
 ## Data and credits
 

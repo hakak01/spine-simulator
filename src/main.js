@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import { DRR, toImage } from './drr.js';
 import { CArm } from './carm.js';
 import { setupXR } from './xr.js';
-import { Tissue, Needle } from './needle.js';
+import { Tissue, Needle, RULES } from './needle.js';
 import { Contrast, PATTERNS } from './contrast.js';
 import { Pen } from './pen.js';
 import { Setup } from './setup.js';
@@ -302,7 +302,14 @@ function setupRefresh() {
     li.textContent = `${l.ok === true ? '✓ ' : l.ok === false ? '✗ ' : '• '}${l.text}`;
     $('s-list').appendChild(li);
   }
-  if (xr && xr.setupChanged) xr.setupChanged(list);
+  if (xr && xr.setupChanged) {
+    const vrList = list.slice();
+    if (needle && needle.state === 'skin') {
+      vrList.push({ ok: null, text: `Needle: depth ${needle.depth.toFixed(0)} mm · notch ${needle.notchClock()} o'clock${needle.curved ? ' · bent tip' : ''}`
+        + (needle.isDeep() ? ` · hub lean ${needle.lean().toFixed(0)}° of max ${needle.maxLean().toFixed(0)}°` : ' · free to re-aim') });
+    }
+    xr.setupChanged(vrList);
+  }
 }
 document.querySelectorAll('[data-root]').forEach((b) => b.addEventListener('click', () => setRoot(b.dataset.root)));
 document.querySelectorAll('[data-side]').forEach((b) => b.addEventListener('click', () => setSide(b.dataset.side)));
@@ -331,13 +338,39 @@ function needleReadout() {
   const a = needle.angles();
   const ang = (v, pos, neg) => (Math.abs(v) < 0.5 ? '' : `${Math.abs(v).toFixed(0)}° ${v > 0 ? pos : neg}`);
   const parts = [ang(a.cranial, 'to head', 'to feet'), ang(a.left, 'to left', 'to right')].filter(Boolean).join(', ') || 'straight down';
-  let t = `Depth ${needle.depth.toFixed(1)} mm of ${needle.length}  ·  ${parts}  ·  skin punctures ${needle.punctures}`;
-  if (needle.curved) t += `  ·  curved tip points ${needle.curveLabel()}`;
+  const notch = needle.notchClock();
+  const away = ((notch + 5) % 12) + 1;
+  let t = `Depth ${needle.depth.toFixed(1)} mm of ${needle.length}  ·  ${parts}  ·  notch ${notch} o'clock (drifts toward ${away})`
+    + `${needle.curved ? '  ·  bent tip' : ''}  ·  skin punctures ${needle.punctures}`;
+  if (needle.state === 'skin' && needle.isDeep()) t += `  ·  hub lean ${needle.lean().toFixed(1)}° of max ${needle.maxLean().toFixed(0)}°`;
   if (needle.boneContact) t += '  ·  BONE CONTACT';
   else if (needle.depth >= needle.length - 0.01) t += '  ·  hub at skin';
-  else if (needle.depth > 15) t += '  ·  deep: angle changes are small';
   el.textContent = t;
+  if (needleHint && performance.now() < needleHint.until) {
+    const h = document.createElement('div'); h.className = 'hint'; h.textContent = needleHint.text; el.appendChild(h);
+  }
   el.classList.toggle('bone', needle.boneContact);
+}
+
+// short messages under the needle readout (and on the VR screen)
+let needleHint = null, lastLimitMsg = -1e9, deepHintShown = false;
+function hint(text, sec = 5) {
+  needleHint = { text, until: performance.now() + sec * 1000 };
+  needleReadout();
+  if (xr && xr.say) xr.say(text, sec);
+}
+// rule 2: the user pushed the hub past the lean limit
+function needleLimit() {
+  if (xr) xr.buzz(0.35, 40);
+  const now = performance.now();
+  if (now - lastLimitMsg < RULES.LIMIT_MSG_SEC * 1000) return;
+  lastLimitMsg = now;
+  hint('Deep tissue is holding the needle: the shaft bends but the tip hardly turns. Withdraw to under 15 mm to redirect.', RULES.LIMIT_MSG_SEC);
+}
+function deepArrowHint() {
+  if (deepHintShown || !needle.isDeep()) return;
+  deepHintShown = true;
+  hint('Deep needle: the arrows now only lean the hub and bend the shaft. The tip turns a little, and only as you advance.', 6);
 }
 
 let foldedForPlacing = false;
@@ -379,22 +412,23 @@ const TAP = { // [first tap, per second while held]
   out1: [() => needle.advance(-1), (dt) => needle.advance(-10 * dt)],
   in5: [() => needle.advance(5), null],
   out5: [() => needle.advance(-5), null],
-  aimCr: [() => needle.rotate(AX_Z, -1), (dt) => needle.rotate(AX_Z, -12 * dt)],
-  aimCa: [() => needle.rotate(AX_Z, 1), (dt) => needle.rotate(AX_Z, 12 * dt)],
-  aimL: [() => needle.rotate(AX_X, -1), (dt) => needle.rotate(AX_X, -12 * dt)],
-  aimR: [() => needle.rotate(AX_X, 1), (dt) => needle.rotate(AX_X, 12 * dt)],
+  aimCr: [() => { deepArrowHint(); needle.rotate(AX_Z, -1); }, (dt) => needle.rotate(AX_Z, -12 * dt)],
+  aimCa: [() => { deepArrowHint(); needle.rotate(AX_Z, 1); }, (dt) => needle.rotate(AX_Z, 12 * dt)],
+  aimL: [() => { deepArrowHint(); needle.rotate(AX_X, -1); }, (dt) => needle.rotate(AX_X, -12 * dt)],
+  aimR: [() => { deepArrowHint(); needle.rotate(AX_X, 1); }, (dt) => needle.rotate(AX_X, 12 * dt)],
 };
-// curved tip: switch on/off and turn the hub
+// bent tip on/off; turn the hub one clock hour (30 deg) per tap
 function setCurved(on) {
   needle.curved = on;
   $('n-curve').classList.toggle('on', on);
-  $('n-curve').textContent = on ? 'Curved tip: ON' : 'Curved tip: OFF';
+  $('n-curve').textContent = on ? 'Bent tip: ON' : 'Bent tip: OFF';
   if (xr && xr.curvedChanged) xr.curvedChanged();
   needle.changed();
 }
 $('n-curve').addEventListener('click', () => setCurved(!needle.curved));
-TAP.spinL = [() => needle.spin(-Math.PI / 4), (dt) => needle.spin(-Math.PI * dt)];
-TAP.spinR = [() => needle.spin(Math.PI / 4), (dt) => needle.spin(Math.PI * dt)];
+$('n-back').addEventListener('click', () => needle.backToSkin());
+TAP.spinL = [() => needle.spin(-Math.PI / 6), (dt) => needle.spin(-Math.PI / 2 * dt)];
+TAP.spinR = [() => needle.spin(Math.PI / 6), (dt) => needle.spin(Math.PI / 2 * dt)];
 
 const heldTap = new Set();
 document.querySelectorAll('[data-tap]').forEach((b) => {
@@ -414,7 +448,7 @@ $('n-place').addEventListener('click', () => setPlacing(!placing));
 $('n-remove').addEventListener('click', () => { needle.remove(); setPlacing(false); });
 $('n-beam').addEventListener('click', () => {
   if (needle.state !== 'skin') return;
-  if (needle.depth > 15) { $('nread').textContent = 'Too deep to re-aim. Withdraw to under 15 mm first.'; return; }
+  if (needle.isDeep()) { hint('Too deep to re-aim. Withdraw to under 15 mm first ("Back to skin").'); return; }
   needle.aim(carm.dir().negate());
 });
 $('n-len').addEventListener('click', () => {
@@ -659,6 +693,7 @@ async function start() {
 
     needle = new Needle(new Tissue(ct, labels, meta, worldToVol));
     needle.onBone = boneFeedback;
+    needle.onLimit = needleLimit;
     needle.onChange = needleChanged;
     contrast = new Contrast(needle.tissue, meta);
     setup = new Setup(meta.anatomy, needle.tissue, carm, needle, volToWorld, worldToVol);

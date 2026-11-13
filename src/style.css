@@ -42,6 +42,8 @@ button.sel { border-color: var(--accent); color: #fff; }
 .tab { display: flex; flex-direction: column; gap: 5px; }
 .tab.hide { display: none; }
 #nread { color: var(--text); font-size: 12px; min-height: 16px; }
+#nread .hint { color: #ffd27a; }
+#nnote { color: #5d6b7a; font-size: 10px; }
 #nread.bone { color: #ffb347; font-weight: 600; }
 button.toggle.on.arm { background: #8a6a12; border-color: #d0a52b; }
 
