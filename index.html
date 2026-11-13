@@ -19,7 +19,7 @@
 </div>
 
 <div id="dock">
-  <div class="tabs"><button data-tab="carm" class="sel">C-arm</button><button data-tab="needle">Needle</button></div>
+  <div class="tabs"><button data-tab="carm" class="sel">C-arm</button><button data-tab="needle">Needle</button><button data-tab="mark">Mark</button></div>
   <div class="tab" id="tab-carm">
     <div class="row">
       <div class="grp"><span class="lbl">Oblique</span><button data-hold="obl-1">◄ R</button><button data-hold="obl1">L ►</button></div>
@@ -56,6 +56,15 @@
       <button id="c-answer" class="toggle on">Show answer</button>
     </div>
     <div id="cread"></div>
+  </div>
+  <div class="tab hide" id="tab-mark">
+    <div class="row">
+      <button id="p-pen" class="toggle">Pen</button>
+      <button id="p-cross">✕ Mark at pen tip</button>
+      <button id="p-erase">Erase marks</button>
+      <button id="p-away">Put pen away</button>
+    </div>
+    <div id="pread">Turn the pen on. Tap the skin to rest its metal tip there (it shows on the C-arm image). Drag on the skin to draw.</div>
   </div>
   <div class="row main">
     <button id="shot" class="big">● SHOT</button>

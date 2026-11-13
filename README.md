@@ -7,16 +7,17 @@ Practice fluoroscopy-guided spinal injections on a real CT scan, in a phone brow
 | # | Feature | Status |
 |---|---|---|
 | 1 | Contrast injection with live fluoro: epidural/perineural, vascular, intrathecal, subdural, intradiscal (+ soft tissue); random vascular uptake | done |
-| 2 | DSA (bone subtraction) | next |
-| 3 | Decision after contrast: inject steroid / reposition / stop | |
-| 4 | C-arm setup steps (square endplate, oblique, AP + lateral checks), sliders in VR | |
+| 2 | DSA (bone subtraction) | skipped for now |
+| 3 | Decision after contrast: inject steroid / reposition / stop | skipped for now |
+| 4 | C-arm setup steps (square endplate, oblique, AP + lateral checks), sliders in VR | next |
 | 5 | Case variety (levels, high iliac crest, S1 foramen, stenosis, scoliosis, obese) and subpedicular / infraneural approaches | |
 | 6 | Curved-tip needle with bevel steering, root contact = leg pain | |
 | 7 | Score sheet | |
 | 8 | Random case mode (answer hidden until debrief) | |
 | 9 | Show ideal needle placement | |
 | 10 | Move the C-arm screen in VR | already works (grip on the screen) |
-| 11 | Marker pen for the skin entry point | |
+| 11 | Marker pen for the skin entry point | done |
+| – | EXIT VR button inside VR | done |
 | 12 | Show nerve roots | |
 
 ## Use it
@@ -41,11 +42,15 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 
 **Contrast** (Needle tab): "Inject contrast 1 mL" pushes 1 mL over 3 s under live fluoro. "Hide contrast" hides it on the images, "Clear contrast" removes it, "Show answer" shows or hides the name of the pattern.
 
+**Marker pen** (Mark tab): turn "Pen" on. Tap the skin: the pen rests there and its metal tip shows on the next C-arm image, so you can check it is over the target. "✕ Mark at pen tip" draws a cross under the tip. Drag on the skin to draw lines (two fingers still zoom and move the view). The violet ink does not show on the C-arm image. "Erase marks" clears the ink.
+
 **Quest 3:** press "Enter VR".
 - Left stick: rotate/tilt C-arm; hold the left trigger to move it instead. X: shot. Y: AP/LAT. A: live. B: bones.
 - Grip: pick up the needle from the tray. Push it into the back like a real needle. It pivots at the skin entry point, and deep tissue makes it stiff. The controller buzzes on bone.
 - Let go and the needle stays in. Then the right stick advances or withdraws it slowly. Grip near the hub to take it again; pull back to take it out.
 - Right trigger: inject contrast. Right stick click: hide/show contrast. Left stick click: clear contrast.
+- Marker pen: it lies on the tray next to the needle. Hold grip near it to pick it up. Touch the back to draw (light buzz); it slides on the skin and does not go in. Let go while it touches the skin and it stays standing there; take a shot to see its metal tip.
+- EXIT VR and ERASE INK buttons are under the C-arm screen and on your left wrist. Point with the controller and pull the trigger; for EXIT VR press twice (the first press shows "PRESS AGAIN").
 - Point at the screen and hold grip to move the screen.
 
 ## How the C-arm image is made

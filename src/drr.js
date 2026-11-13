@@ -15,6 +15,8 @@ uniform vec3 src, detC, detU, detV;  // tube, detector centre and half-axes (mm,
 uniform float stepMM;
 uniform float nOn, nR, nMu;          // needle: on/off, radius (mm), attenuation relative to water
 uniform vec3 nTip, nHub, nHubEnd;    // shaft from tip to hub, plastic hub from nHub to nHubEnd
+uniform float mOn;                   // marker pen: metal tip from mA to mB
+uniform vec3 mA, mB;
 uniform sampler3D cTex;              // injected contrast (density 0..1) on a small grid
 uniform float cOn, cMu;              // contrast on/off, attenuation of full-strength contrast vs water
 uniform vec3 cOrigin, cDims;         // grid corner (CT voxel index) and size (voxels)
@@ -99,6 +101,7 @@ void main() {
       sum += cs * cstep * cMu;
     }
   }
+  if (mOn > 0.5) sum += min(cylChord(src, d, mA, mB, 1.0) * 90.0, 200.0);
   if (nOn > 0.5) {
     sum += min(cylChord(src, d, nTip, nHub, nR) * nMu, 170.0);    // steel shaft
     sum += cylChord(src, d, nHub, nHubEnd, 3.2) * 1.15;           // plastic hub
@@ -122,6 +125,7 @@ export class DRR {
         nOn: { value: 0 }, nR: { value: 0.36 }, nMu: { value: 90 },
         nTip: { value: new THREE.Vector3() }, nHub: { value: new THREE.Vector3(0, 1, 0) },
         nHubEnd: { value: new THREE.Vector3(0, 2, 0) },
+        mOn: { value: 0 }, mA: { value: new THREE.Vector3() }, mB: { value: new THREE.Vector3(0, 1, 0) },
         cTex: { value: null }, cOn: { value: 0 }, cMu: { value: 40 },
         cOrigin: { value: new THREE.Vector3() }, cDims: { value: new THREE.Vector3(1, 1, 1) },
       },
@@ -153,6 +157,13 @@ export class DRR {
     u.nR.value = r;
     u.nMu.value = 90 * (n.radius / r) * (n.radius / r);
     u.nTip.value.copy(n.tip); u.nHub.value.copy(n.hub); u.nHubEnd.value.copy(n.hubEnd);
+  }
+
+  // marker pen metal tip: null or {a, b} in volume mm
+  setMarker(m) {
+    const u = this.mat.uniforms;
+    u.mOn.value = m ? 1 : 0;
+    if (m) { u.mA.value.copy(m.a); u.mB.value.copy(m.b); }
   }
 
   // contrast: Contrast object (see contrast.js)

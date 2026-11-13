@@ -5,6 +5,7 @@ import { CArm } from './carm.js';
 import { setupXR } from './xr.js';
 import { Tissue, Needle } from './needle.js';
 import { Contrast, PATTERNS } from './contrast.js';
+import { Pen } from './pen.js';
 
 const $ = (id) => document.getElementById(id);
 const loading = $('loading');
@@ -70,7 +71,7 @@ scene.add(carm.model);
 
 // ---------- state ----------
 const state = { answer: true, lastLive: 0, k: 0.012, shots: 0, liveSec: 0, live: false, bones: false, preset: 'AP', level: 'L4-5', dirty: false, lastMove: 0, hq: true };
-let drr, volToWorld, worldToVol, levels = {}, xr = null, needle = null, skinMesh = null, contrast = null;
+let drr, volToWorld, worldToVol, levels = {}, xr = null, needle = null, skinMesh = null, contrast = null, pen = null;
 const fcanvas = $('fluoro');
 const fctx = fcanvas.getContext('2d');
 const off = document.createElement('canvas');
@@ -93,6 +94,8 @@ function volFrame() {
 
 function makeImage(size, step) {
   if (contrast) drr.setContrast(contrast);
+  const mk = pen && pen.xray();
+  drr.setMarker(mk ? { a: mk.a.applyMatrix4(worldToVol), b: mk.b.applyMatrix4(worldToVol) } : null);
   if (needle && needle.state !== 'none') {
     const tip = needle.tip().applyMatrix4(worldToVol), hub = needle.hub().applyMatrix4(worldToVol);
     const hubEnd = hub.clone().add(hub.clone().sub(tip).normalize().multiplyScalar(20));
@@ -337,10 +340,70 @@ $('n-len').addEventListener('click', () => {
 });
 document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
   document.querySelectorAll('.tabs button').forEach((o) => o.classList.toggle('sel', o === b));
-  $('tab-carm').classList.toggle('hide', b.dataset.tab !== 'carm');
-  $('tab-needle').classList.toggle('hide', b.dataset.tab !== 'needle');
+  ['carm', 'needle', 'mark'].forEach((t) => $(`tab-${t}`).classList.toggle('hide', b.dataset.tab !== t));
   if (b.dataset.tab !== 'needle') setPlacing(false);
+  if (b.dataset.tab !== 'mark') setPenMode(false);
 }));
+
+// ---------- marker pen (phone) ----------
+let penMode = false;
+function setPenMode(on) {
+  penMode = on;
+  $('p-pen').classList.toggle('on', on);
+  controls.enableRotate = !on;          // one finger draws; two fingers still zoom and pan
+  if (on) setPlacing(false);
+  penReadout();
+}
+function penReadout(msg) {
+  if (msg) { $('pread').textContent = msg; return; }
+  $('pread').textContent = penMode
+    ? 'Tap the skin: the metal pen tip rests there (take a SHOT to see it). Drag on the skin: draw. Two fingers: zoom / move the view.'
+    : 'Turn the pen on. Tap the skin to rest its metal tip there (it shows on the C-arm image). Drag on the skin to draw.';
+}
+function skinHit(clientX, clientY) {
+  const r = renderer.domElement.getBoundingClientRect();
+  const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+  const rc = new THREE.Raycaster();
+  rc.setFromCamera(ndc, camera);
+  const hit = rc.intersectObject(skinMesh, false)[0];
+  if (!hit) return null;
+  return { point: hit.point, normal: hit.face.normal.clone().transformDirection(skinMesh.matrixWorld) };
+}
+function penMoved() {
+  state.lastMove = performance.now();
+  if (state.live) { state.dirty = true; state.hq = false; }
+}
+(function penTouch() {
+  const el = renderer.domElement;
+  const pointers = new Set();
+  let drawing = false;
+  el.addEventListener('pointerdown', (e) => {
+    pointers.add(e.pointerId);
+    if (!penMode || !pen) return;
+    if (pointers.size > 1) { drawing = false; pen.lift(); return; }
+    const h = skinHit(e.clientX, e.clientY);
+    if (!h) return;
+    drawing = true;
+    pen.lift();
+    pen.setPose(h.point, h.normal.clone().negate(), 'rest');
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!drawing || pointers.size > 1) return;
+    const h = skinHit(e.clientX, e.clientY);
+    if (!h) { pen.lift(); return; }
+    pen.setPose(h.point, h.normal.clone().negate(), 'rest');
+    pen.dot(h.point, h.normal);
+  });
+  const up = (e) => { pointers.delete(e.pointerId); if (drawing) { drawing = false; pen.lift(); } };
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => el.addEventListener(ev, up));
+})();
+$('p-pen').addEventListener('click', () => setPenMode(!penMode));
+$('p-cross').addEventListener('click', () => {
+  if (!pen || !pen.markAtTip()) penReadout('Rest the pen tip on the skin first (Pen on, then tap the skin).');
+  else penReadout('Marked. Take a SHOT: the mark is ink, so only the metal pen tip shows on the C-arm.');
+});
+$('p-erase').addEventListener('click', () => { if (pen) pen.clearInk(); });
+$('p-away').addEventListener('click', () => { if (pen) pen.hide(); setPenMode(false); });
 // a tap (not a drag) on the 3D view places the needle
 (function tapToPlace() {
   let down = null;
@@ -514,6 +577,9 @@ async function start() {
     needle.onBone = boneFeedback;
     needle.onChange = needleChanged;
     contrast = new Contrast(needle.tissue, meta);
+    pen = new Pen(needle.tissue);
+    pen.onChange = penMoved;
+    scene.add(pen.model, pen.ink);
     scene.add(needle.model);
 
     const W = (p) => new THREE.Vector3(...p).applyMatrix4(volToWorld);
@@ -537,13 +603,13 @@ async function start() {
     readout();
     xr = await setupXR(renderer, scene, {
       canvas: fcanvas, shot, moveCArm, panCArm, toggleLive, toggleBones, needle,
-      injectContrast, toggleHideContrast, clearContrast,
+      injectContrast, toggleHideContrast, clearContrast, pen,
       tray: new THREE.Vector3(0.38, TABLE_TOP + 0.03, MIDLINE_Z + 0.36),
       togglePreset: () => setPreset(state.preset === 'AP' ? 'LAT' : 'AP'),
       onXR: () => {},
     });
     loading.classList.add('hide');
-    window.sim = { contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
+    window.sim = { xr, pen, setPenMode, skinHit, contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
   } catch (e) {
     loading.textContent = `Could not start: ${e.message}`;
     console.error(e);
