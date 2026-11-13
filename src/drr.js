@@ -14,7 +14,10 @@ uniform vec3 dims, spacing;          // voxels, mm per voxel
 uniform vec3 src, detC, detU, detV;  // tube, detector centre and half-axes (mm, volume frame)
 uniform float stepMM;
 uniform float nOn, nR, nMu;          // needle: on/off, radius (mm), attenuation relative to water
-uniform vec3 nTip, nHub, nHubEnd;    // shaft from tip to hub, plastic hub from nHub to nHubEnd
+#define NSEG 8
+uniform vec3 nA[NSEG], nB[NSEG];     // steel needle as up to 8 straight pieces (a curved needle bends)
+uniform int nSegs;
+uniform vec3 nHub, nHubEnd;          // plastic hub from nHub to nHubEnd
 uniform float mOn;                   // marker pen: metal tip from mA to mB
 uniform vec3 mA, mB;
 uniform sampler3D cTex;              // injected contrast (density 0..1) on a small grid
@@ -103,7 +106,9 @@ void main() {
   }
   if (mOn > 0.5) sum += min(cylChord(src, d, mA, mB, 1.0) * 90.0, 200.0);
   if (nOn > 0.5) {
-    sum += min(cylChord(src, d, nTip, nHub, nR) * nMu, 170.0);    // steel shaft
+    float st = 0.0;
+    for (int i = 0; i < NSEG; i++) { if (i >= nSegs) break; st += cylChord(src, d, nA[i], nB[i], nR); }
+    sum += min(st * nMu, 170.0);                                    // steel shaft
     sum += cylChord(src, d, nHub, nHubEnd, 3.2) * 1.15;           // plastic hub
   }
   outColor = pack(sum);  // water-equivalent path length, mm
@@ -123,7 +128,9 @@ export class DRR {
         detU: { value: new THREE.Vector3() }, detV: { value: new THREE.Vector3() },
         stepMM: { value: 1.0 },
         nOn: { value: 0 }, nR: { value: 0.36 }, nMu: { value: 90 },
-        nTip: { value: new THREE.Vector3() }, nHub: { value: new THREE.Vector3(0, 1, 0) },
+        nA: { value: Array.from({ length: 8 }, () => new THREE.Vector3()) },
+        nB: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0, 1, 0)) },
+        nSegs: { value: 0 }, nHub: { value: new THREE.Vector3(0, 1, 0) },
         nHubEnd: { value: new THREE.Vector3(0, 2, 0) },
         mOn: { value: 0 }, mA: { value: new THREE.Vector3() }, mB: { value: new THREE.Vector3(0, 1, 0) },
         cTex: { value: null }, cOn: { value: 0 }, cMu: { value: 40 },
@@ -147,7 +154,7 @@ export class DRR {
     return this.targets[size];
   }
 
-  // needle: null, or {tip, hub, hubEnd, radius} in volume mm
+  // needle: null, or {segments: [[a, b], ...], hub, hubEnd, radius} in volume mm
   setNeedle(n, pixelMM = 0.27) {
     const u = this.mat.uniforms;
     u.nOn.value = n ? 1 : 0;
@@ -156,7 +163,10 @@ export class DRR {
     const r = Math.max(n.radius, 0.7 * pixelMM);
     u.nR.value = r;
     u.nMu.value = 90 * (n.radius / r) * (n.radius / r);
-    u.nTip.value.copy(n.tip); u.nHub.value.copy(n.hub); u.nHubEnd.value.copy(n.hubEnd);
+    const segs = n.segments.slice(0, 8);
+    segs.forEach(([a, b], i) => { u.nA.value[i].copy(a); u.nB.value[i].copy(b); });
+    u.nSegs.value = segs.length;
+    u.nHub.value.copy(n.hub); u.nHubEnd.value.copy(n.hubEnd);
   }
 
   // marker pen metal tip: null or {a, b} in volume mm

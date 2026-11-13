@@ -98,9 +98,11 @@ function makeImage(size, step) {
   const mk = pen && pen.xray();
   drr.setMarker(mk ? { a: mk.a.applyMatrix4(worldToVol), b: mk.b.applyMatrix4(worldToVol) } : null);
   if (needle && needle.state !== 'none') {
-    const tip = needle.tip().applyMatrix4(worldToVol), hub = needle.hub().applyMatrix4(worldToVol);
-    const hubEnd = hub.clone().add(hub.clone().sub(tip).normalize().multiplyScalar(20));
-    drr.setNeedle({ tip, hub, hubEnd, radius: needle.radius }, 2 * carm.detR * 1000 * carm.SOD / carm.SID / size);
+    const V = (p) => p.clone().applyMatrix4(worldToVol);
+    const segments = needle.segments().map(([a, b]) => [V(a), V(b)]);
+    const hubW = needle.hub();
+    const hub = V(hubW), hubEnd = V(hubW.clone().addScaledVector(needle.d, -0.02));
+    drr.setNeedle({ segments, hub, hubEnd, radius: needle.radius }, 2 * carm.detR * 1000 * carm.SOD / carm.SID / size);
   } else drr.setNeedle(null);
   const sums = drr.render(volFrame(), size, step);
   const img = toImage(sums, size, { flip: carm.flip, k: state.k });
@@ -330,6 +332,7 @@ function needleReadout() {
   const ang = (v, pos, neg) => (Math.abs(v) < 0.5 ? '' : `${Math.abs(v).toFixed(0)}° ${v > 0 ? pos : neg}`);
   const parts = [ang(a.cranial, 'to head', 'to feet'), ang(a.left, 'to left', 'to right')].filter(Boolean).join(', ') || 'straight down';
   let t = `Depth ${needle.depth.toFixed(1)} mm of ${needle.length}  ·  ${parts}  ·  skin punctures ${needle.punctures}`;
+  if (needle.curved) t += `  ·  curved tip points ${needle.curveLabel()}`;
   if (needle.boneContact) t += '  ·  BONE CONTACT';
   else if (needle.depth >= needle.length - 0.01) t += '  ·  hub at skin';
   else if (needle.depth > 15) t += '  ·  deep: angle changes are small';
@@ -337,11 +340,18 @@ function needleReadout() {
   el.classList.toggle('bone', needle.boneContact);
 }
 
+let foldedForPlacing = false;
 function setPlacing(on) {
   placing = on;
   $('n-place').classList.toggle('on', on);
   $('n-place').classList.toggle('arm', on);
+  // fold the controls away so the patient's back is free to tap; unfold afterwards
+  const dock = $('dock');
+  if (on && !dock.classList.contains('min')) { dock.classList.add('min'); foldedForPlacing = true; }
+  if (!on && foldedForPlacing) { dock.classList.remove('min'); foldedForPlacing = false; }
+  $('fold').textContent = dock.classList.contains('min') ? '▴ More' : '▾ Less';
   needleReadout();
+  if (on) $('readout').textContent = 'Tap the patient\'s back to place the needle.';
 }
 
 function placeNeedleAt(point, normal) { // world point on the skin, outward normal
@@ -374,6 +384,18 @@ const TAP = { // [first tap, per second while held]
   aimL: [() => needle.rotate(AX_X, -1), (dt) => needle.rotate(AX_X, -12 * dt)],
   aimR: [() => needle.rotate(AX_X, 1), (dt) => needle.rotate(AX_X, 12 * dt)],
 };
+// curved tip: switch on/off and turn the hub
+function setCurved(on) {
+  needle.curved = on;
+  $('n-curve').classList.toggle('on', on);
+  $('n-curve').textContent = on ? 'Curved tip: ON' : 'Curved tip: OFF';
+  if (xr && xr.curvedChanged) xr.curvedChanged();
+  needle.changed();
+}
+$('n-curve').addEventListener('click', () => setCurved(!needle.curved));
+TAP.spinL = [() => needle.spin(-Math.PI / 4), (dt) => needle.spin(-Math.PI * dt)];
+TAP.spinR = [() => needle.spin(Math.PI / 4), (dt) => needle.spin(Math.PI * dt)];
+
 const heldTap = new Set();
 document.querySelectorAll('[data-tap]').forEach((b) => {
   const k = b.dataset.tap;
@@ -381,7 +403,8 @@ document.querySelectorAll('[data-tap]').forEach((b) => {
   const stop = () => { clearTimeout(timer); heldTap.delete(k); };
   b.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    if (!needle || needle.state !== 'skin') { needleReadout(); return; }
+    if (!needle || (needle.state !== 'skin' && !k.startsWith('spin'))) { needleReadout(); return; }
+    if (needle.state === 'none') return;
     TAP[k][0]();
     if (TAP[k][1]) timer = setTimeout(() => heldTap.add(k), 400);
   });
@@ -667,13 +690,13 @@ async function start() {
     xr = await setupXR(renderer, scene, {
       canvas: fcanvas, shot, moveCArm, panCArm, toggleLive, toggleBones, needle,
       injectContrast, toggleHideContrast, clearContrast, pen,
-      carm, setup, setRoot, setSide, setPlate, setTilt, setObl, setAlong, along, setupCentre, setupCheck,
+      setCurved, carm, setup, setRoot, setSide, setPlate, setTilt, setObl, setAlong, along, setupCentre, setupCheck,
       tray: new THREE.Vector3(0.38, TABLE_TOP + 0.03, MIDLINE_Z + 0.36),
       togglePreset: () => setPreset(state.preset === 'AP' ? 'LAT' : 'AP'),
       onXR: () => {},
     });
     loading.classList.add('hide');
-    window.sim = { setup, setupCentre, setupCheck, setRoot, setSide, setTilt, setObl, setAlong, xr, pen, setPenMode, skinHit, contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
+    window.sim = { setCurved, setup, setupCentre, setupCheck, setRoot, setSide, setTilt, setObl, setAlong, xr, pen, setPenMode, skinHit, contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
   } catch (e) {
     loading.textContent = `Could not start: ${e.message}`;
     console.error(e);

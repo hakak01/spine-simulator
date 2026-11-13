@@ -51,15 +51,16 @@ export async function setupXR(renderer, scene, ctx) {
   const tex = new THREE.CanvasTexture(ctx.canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   const help = document.createElement('canvas');
-  help.width = 1024; help.height = 365;
+  help.width = 1024; help.height = 408;
   const hctx = help.getContext('2d');
-  hctx.fillStyle = '#11161c'; hctx.fillRect(0, 0, 1024, 365);
+  hctx.fillStyle = '#11161c'; hctx.fillRect(0, 0, 1024, 408);
   hctx.fillStyle = '#cfe8ff'; hctx.font = '27px sans-serif';
   [
     'LEFT stick: rotate / tilt C-arm (hold left trigger: move it)',
     'X: shot    Y: AP / LAT    A: live on/off    B: show bones',
     'GRIP: pick up the needle. Push it into the back like a real one.',
     'Needle left in the patient: RIGHT stick = fine advance / withdraw',
+    'Curved tip: TWIST your wrist while holding the needle to turn the hub',
     'RIGHT TRIGGER: inject contrast (1 mL, live fluoro)',
     'Right stick click: hide / show contrast   Left stick click: clear it',
     'PEN on the tray: grip near it, touch the skin to draw (metal tip shows)',
@@ -73,19 +74,20 @@ export async function setupXR(renderer, scene, ctx) {
   bezel.position.set(0, -0.16, -0.017);
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.52), new THREE.MeshBasicMaterial({ map: tex }));
   screen.position.y = 0.03;
-  const helpPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.185), new THREE.MeshBasicMaterial({ map: helpTex }));
-  helpPlane.position.y = -0.34;
+  const helpPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.207), new THREE.MeshBasicMaterial({ map: helpTex }));
+  helpPlane.position.y = -0.35;
   monitor.add(bezel, screen, helpPlane);
 
   // ----- in-VR buttons: on the screen and on the left wrist -----
   const DEFS = [
     { id: 'exit', label: 'EXIT VR', bg: '#9b2b22', hot: '#e0473a' },
     { id: 'erase', label: 'ERASE INK', bg: '#3c4654', hot: '#5d6c80' },
+    { id: 'curve', label: 'CURVE: OFF', bg: '#3c4654', hot: '#5d6c80' },
   ];
-  const monBar = buttonBar(DEFS, 0.5, 0.075);
-  monBar.mesh.position.set(0, -0.5, 0.001);
+  const monBar = buttonBar(DEFS, 0.52, 0.07);
+  monBar.mesh.position.set(0, -0.505, 0.001);
   monitor.add(monBar.mesh);
-  const wristBar = buttonBar(DEFS, 0.16, 0.04);
+  const wristBar = buttonBar(DEFS, 0.21, 0.04);
   wristBar.mesh.position.set(0, 0.035, 0.03);
   wristBar.mesh.rotation.x = -Math.PI / 3;
   const bars = [monBar, wristBar];
@@ -99,6 +101,8 @@ export async function setupXR(renderer, scene, ctx) {
       setTimeout(() => { bars.forEach((b) => { b.labels.exit = null; b.draw(); }); }, 4000);
     } else if (id === 'erase') {
       pen.clearInk();
+    } else if (id === 'curve') {
+      ctx.setCurved(!needle.curved);
     }
   }
 
@@ -189,7 +193,7 @@ export async function setupXR(renderer, scene, ctx) {
   const pos = new THREE.Vector3(), fwd = new THREE.Vector3(), H = new THREE.Vector3();
   const v = new THREE.Vector3(), p = new THREE.Vector3(), nd = new THREE.Vector3();
   const grabOff = new THREE.Vector3();
-  let grabbedBy = null, heldNeedle = null, heldPen = null, lastTick = 0, sliding = null;
+  let grabbedBy = null, heldNeedle = null, heldPen = null, lastTick = 0, sliding = null, lastRoll = null;
   const plane = new THREE.Plane(), hitP = new THREE.Vector3(), nrm = new THREE.Vector3();
   const dz = (x) => (Math.abs(x) < 0.15 ? 0 : x);
 
@@ -200,8 +204,27 @@ export async function setupXR(renderer, scene, ctx) {
     H.copy(pos).addScaledVector(fwd, HAND_OFFSET);
   }
 
+  // controller roll around the needle axis (radians): twisting the wrist turns the hub
+  const HEADW = new THREE.Vector3(-1, 0, 0);
+  function rollAngle() {
+    const axis = needle.state === 'skin' ? needle.d : fwd;
+    const r = v.set(1, 0, 0).applyMatrix4(rot);
+    r.addScaledVector(axis, -r.dot(axis));
+    const ref = p.copy(HEADW).addScaledVector(axis, -HEADW.dot(axis));
+    if (ref.lengthSq() < 0.04) ref.set(0, 0, 1).addScaledVector(axis, -axis.z);
+    return Math.atan2(nd.crossVectors(ref, r).dot(axis), ref.dot(r));
+  }
+
   function holdNeedle(dt) {
     const T = needle.tissue, L = needle.length;
+    const roll = rollAngle();
+    if (lastRoll !== null) {
+      let dr = roll - lastRoll;
+      if (dr > Math.PI) dr -= 2 * Math.PI;
+      if (dr < -Math.PI) dr += 2 * Math.PI;
+      if (Math.abs(dr) > 1e-4) needle.spin(dr);
+    }
+    lastRoll = roll;
     if (needle.state !== 'skin') {
       // needle in the air: it follows the hand. Does the tip enter the skin?
       needle.setFree(H, fwd);
@@ -345,7 +368,7 @@ export async function setupXR(renderer, scene, ctx) {
       }
       if (!pressed[1]) {
         if (grabbedBy === c) { scene.attach(monitor); grabbedBy = null; }
-        if (heldNeedle === c) { heldNeedle = null; if (needle.state !== 'skin') park(); }
+        if (heldNeedle === c) { heldNeedle = null; lastRoll = null; if (needle.state !== 'skin') park(); }
         if (heldPen === c) { heldPen = null; pen.lift(); if (pen.touching) pen.setPose(pen.tip, pen.dir, 'rest'); else parkPen(); }
       }
       if (heldNeedle === c) holdNeedle(dt);
@@ -369,5 +392,6 @@ export async function setupXR(renderer, scene, ctx) {
   }
 
   const setupChanged = (lines) => { panel.lines = lines; redrawPanel(); };
-  return { update, buzz, setupChanged, onImage: () => { tex.needsUpdate = true; }, monitor, monBar, wristBar, panel };
+  const curvedChanged = () => { bars.forEach((b) => { b.labels.curve = needle.curved ? 'CURVE: ON' : null; b.draw(); }); };
+  return { update, buzz, setupChanged, curvedChanged, onImage: () => { tex.needsUpdate = true; }, monitor, monBar, wristBar, panel };
 }

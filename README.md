@@ -10,8 +10,8 @@ Practice fluoroscopy-guided spinal injections on a real CT scan, in a phone brow
 | 2 | DSA (bone subtraction) | skipped for now |
 | 3 | Decision after contrast: inject steroid / reposition / stop | skipped for now |
 | 4 | C-arm setup steps (square endplate, oblique, AP + lateral checks), sliders in VR | done |
-| 5 | Case variety (levels, high iliac crest, S1 foramen, stenosis, scoliosis, obese) and subpedicular / infraneural approaches | |
-| 6 | Curved-tip needle with bevel steering, root contact = leg pain | |
+| 5 | Case variety (levels, high iliac crest, S1 foramen, stenosis, scoliosis, obese) and subpedicular / infraneural approaches | paused (plan: extra real CTs + changes to this CT) |
+| 6 | Curved-tip needle steered by turning the hub | done (bone vibration and leg pain left as they are, as asked) |
 | 7 | Score sheet | |
 | 8 | Random case mode (answer hidden until debrief) | |
 | 9 | Show ideal needle placement | |
@@ -37,6 +37,7 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 - "Aim tip to" Head / Feet / Left / Right: 1° per tap, hold to keep turning. The needle pivots at the skin. When the tip is deeper than 15 mm, tissue holds the needle, so angle changes are small: withdraw to redirect.
 - Advance / Withdraw: 1 mm or 5 mm per tap; hold ±1 to keep moving.
 - The needle stops on bone. You get a short vibration (Android) and a soft tick sound. iPhone browsers do not support vibration.
+- "Curved tip: ON" gives the needle a bent tip. As it advances through soft tissue it drifts toward its curve (about 0.35° per mm: ~3 mm over 30 mm). "Turn hub ⟲ / ⟳" turns the hub 45° per tap (hold to keep turning); the yellow notch on the hub and the readout show where the curve points. Withdrawing follows the same track back; turning the hub only changes the path from there on.
 - "Align to beam" lines the needle up with the C-arm beam (only when shallower than 15 mm). "Needle 3.5 in / 5 in" changes the length.
 - The needle shows on the C-arm image after a SHOT, or all the time in LIVE.
 
@@ -53,6 +54,7 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 **Quest 3:** press "Enter VR".
 - Left stick: rotate/tilt C-arm; hold the left trigger to move it instead. X: shot. Y: AP/LAT. A: live. B: bones.
 - Grip: pick up the needle from the tray. Push it into the back like a real needle. It pivots at the skin entry point, and deep tissue makes it stiff. The controller buzzes on bone.
+- Curved tip: point at CURVE: OFF/ON (under the C-arm screen or on the left wrist) and pull the trigger. While holding the needle, twist your wrist to turn the hub; the yellow notch shows where the curve points.
 - Let go and the needle stays in. Then the right stick advances or withdraws it slowly. Grip near the hub to take it again; pull back to take it out.
 - Right trigger: inject contrast. Right stick click: hide/show contrast. Left stick click: clear contrast.
 - Marker pen: it lies on the tray next to the needle. Hold grip near it to pick it up. Touch the back to draw (light buzz); it slides on the skin and does not go in. Let go while it touches the skin and it stays standing there; take a shot to see its metal tip.
@@ -70,7 +72,7 @@ Limits: the CT has 1.5 mm voxels, so the image is a little softer than a real C-
 
 The needle is a 22G spinal needle (0.7 mm). Bone is found from the CT (above 180 HU inside the segmented bones), so the needle stops where the real bone surface is. The needle is drawn into the C-arm image as a steel cylinder with a plastic hub, so a needle in line with the beam shows as a dot inside the hub ring ("hub view").
 
-Limits for now: the needle is straight (no bevel steering or bending), and it passes through soft organs without warning. Complications and contrast come in steps 3 and 4.
+The needle's track through tissue is stored, so a curved-tip needle shows its bend on the C-arm image (drawn as up to 8 straight pieces). A straight needle has no bevel drift. It passes through soft organs without warning. Complications and contrast come in steps 3 and 4.
 
 ## How contrast works
 
