@@ -19,7 +19,8 @@ What this script does
    data/ct_u8.bin.gz  uint8 volume, HU = value*10 - 1000, x fastest (RAS index order)
    data/skin.bin.gz   body surface mesh
    data/bone.bin.gz   bone surface mesh
-   data/labels_u8.bin.gz  tissue label per voxel (see "labels" in ct.json)
+   data/labels_u8.bin.gz  tissue label per voxel (see "labels" in ct.json), including
+                      discs, epidural space, foramina and modelled nerve roots
    data/ct.json       size, spacing, landmarks (mm, volume frame)
 
 Needs: pip install remotezip nibabel numpy scipy scikit-image fast-simplification
@@ -32,6 +33,9 @@ import nibabel as nib
 from scipy import ndimage
 from skimage import measure
 import fast_simplification
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import spine_anatomy  # noqa: E402
 
 URL = "https://zenodo.org/records/10047263/files/Totalsegmentator_dataset_small_v201.zip?download=1"
 CASE = "s0461"
@@ -168,6 +172,9 @@ def main():
     for b in BONES:
         seg_bone |= load(b)[sl]
     lab[ndimage.binary_dilation(seg_bone, iterations=1) & (hu > 130)] = 2
+    # discs, epidural space, foramina, exiting nerve roots (see tools/spine_anatomy.py)
+    verts = {v: load("vertebrae_" + v)[sl] for v in ["L2", "L3", "L4", "L5", "S1"]}
+    anatomy = spine_anatomy.build(lab, load("spinal_cord")[sl] & body, verts, sp)
     with gzip.open(os.path.join(OUT, "labels_u8.bin.gz"), "wb", compresslevel=9) as f:
         f.write(np.ascontiguousarray(lab.transpose(2, 1, 0)).tobytes())
     print(f"  labels_u8.bin.gz: {os.path.getsize(os.path.join(OUT, 'labels_u8.bin.gz'))/1e6:.2f} MB")
@@ -191,11 +198,13 @@ def main():
         "spacing": [float(s) for s in sp],
         "encoding": "uint8, HU = v*10 - 1000, x fastest; axes: +x patient right, +y anterior, +z superior",
         "labels": {"0": "air", "1": "soft tissue", "2": "bone", "3": "spinal canal", "4": "artery",
-                   "5": "vein", "6": "bowel", "7": "muscle", "8": "kidney", "9": "bladder/prostate"},
+                   "5": "vein", "6": "bowel", "7": "muscle", "8": "kidney", "9": "bladder/prostate",
+                   "10": "disc", "11": "epidural space", "12": "nerve root", "13": "foramen / periradicular fat"},
         "landmarks": lm,
+        "anatomy": anatomy,
     }
     with open(os.path.join(OUT, "ct.json"), "w") as f:
-        json.dump(meta, f, indent=1)
+        json.dump(meta, f, indent=1, default=float)
     print(json.dumps(lm))
 
 

@@ -19,27 +19,29 @@ export async function setupXR(renderer, scene, ctx) {
   const tex = new THREE.CanvasTexture(ctx.canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   const help = document.createElement('canvas');
-  help.width = 1024; help.height = 236;
+  help.width = 1024; help.height = 322;
   const hctx = help.getContext('2d');
-  hctx.fillStyle = '#11161c'; hctx.fillRect(0, 0, 1024, 236);
+  hctx.fillStyle = '#11161c'; hctx.fillRect(0, 0, 1024, 322);
   hctx.fillStyle = '#cfe8ff'; hctx.font = '27px sans-serif';
   [
     'LEFT stick: rotate / tilt C-arm (hold left trigger: move it)',
     'X: shot    Y: AP / LAT    A: live on/off    B: show bones',
     'GRIP: pick up the needle. Push it into the back like a real one.',
     'Needle left in the patient: RIGHT stick = fine advance / withdraw',
+    'RIGHT TRIGGER: inject contrast (1 mL, live fluoro)',
+    'Right stick click: hide / show contrast   Left stick click: clear it',
     'Point at this screen + hold GRIP: move the screen',
   ].forEach((t, i) => hctx.fillText(t, 20, 40 + i * 43));
   const helpTex = new THREE.CanvasTexture(help);
   helpTex.colorSpace = THREE.SRGBColorSpace;
 
   const monitor = new THREE.Group();
-  const bezel = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.76, 0.03), new THREE.MeshStandardMaterial({ color: 0x20262e }));
-  bezel.position.set(0, -0.07, -0.017);
+  const bezel = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.8, 0.03), new THREE.MeshStandardMaterial({ color: 0x20262e }));
+  bezel.position.set(0, -0.09, -0.017);
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.52), new THREE.MeshBasicMaterial({ map: tex }));
   screen.position.y = 0.03;
-  const helpPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.12), new THREE.MeshBasicMaterial({ map: helpTex }));
-  helpPlane.position.y = -0.31;
+  const helpPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.163), new THREE.MeshBasicMaterial({ map: helpTex }));
+  helpPlane.position.y = -0.33;
   monitor.add(bezel, screen, helpPlane);
   monitor.position.set(-0.45, 1.45, -1.05);
   monitor.lookAt(0, 1.45, 0);
@@ -153,11 +155,14 @@ export async function setupXR(renderer, scene, ctx) {
         }
         if (edge(4)) ctx.shot();
         if (edge(5)) ctx.togglePreset();
+        if (edge(3)) ctx.clearContrast();     // left stick click
       } else {
         if (ay && needle.state === 'skin' && heldNeedle !== c) needle.advance(-ay * 6 * dt);
         else if ((ax || ay) && needle.state !== 'skin') ctx.panCArm(ax * 0.08 * dt, -ay * 0.08 * dt);
         if (edge(4)) ctx.toggleLive();
         if (edge(5)) ctx.toggleBones();
+        if (edge(0)) ctx.injectContrast();    // right trigger = push the plunger
+        if (edge(3)) ctx.toggleHideContrast(); // right stick click
       }
       pose(c);
       if (edge(1) && grabbedBy !== c && heldNeedle !== c) {

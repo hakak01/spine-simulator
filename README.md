@@ -2,15 +2,22 @@
 
 Practice fluoroscopy-guided spinal injections on a real CT scan, in a phone browser or on a Meta Quest 3 (VR).
 
-**Status: Step 2 of 5.** CT spine (L2 to coccyx), realistic C-arm images, C-arm movements, movable C-arm screen, and a needle you can place, angle, advance and withdraw, with a buzz on bone contact.
+**Status:** C-arm, needle and contrast injection work. Now adding the TFESI trainer features one at a time.
 
-| Step | What | Status |
+| # | Feature | Status |
 |---|---|---|
-| 1 | CT spine, C-arm image, C-arm moves, movable screen | done |
-| 2 | Needle: skin entry, angle, advance/withdraw, buzz on bone | done |
-| 3 | Contrast at L4-5 transforaminal: right and wrong patterns, hide contrast | next |
-| 4 | L3-4, L4-5, L5-S1 transforaminal, facet joint, medial branch; caudal; ganglion impar | |
-| 5 | Quest 3 VR polish | |
+| 1 | Contrast injection with live fluoro: epidural/perineural, vascular, intrathecal, subdural, intradiscal (+ soft tissue); random vascular uptake | done |
+| 2 | DSA (bone subtraction) | next |
+| 3 | Decision after contrast: inject steroid / reposition / stop | |
+| 4 | C-arm setup steps (square endplate, oblique, AP + lateral checks), sliders in VR | |
+| 5 | Case variety (levels, high iliac crest, S1 foramen, stenosis, scoliosis, obese) and subpedicular / infraneural approaches | |
+| 6 | Curved-tip needle with bevel steering, root contact = leg pain | |
+| 7 | Score sheet | |
+| 8 | Random case mode (answer hidden until debrief) | |
+| 9 | Show ideal needle placement | |
+| 10 | Move the C-arm screen in VR | already works (grip on the screen) |
+| 11 | Marker pen for the skin entry point | |
+| 12 | Show nerve roots | |
 
 ## Use it
 
@@ -32,10 +39,13 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 - "Align to beam" lines the needle up with the C-arm beam (only when shallower than 15 mm). "Needle 3.5 in / 5 in" changes the length.
 - The needle shows on the C-arm image after a SHOT, or all the time in LIVE.
 
+**Contrast** (Needle tab): "Inject contrast 1 mL" pushes 1 mL over 3 s under live fluoro. "Hide contrast" hides it on the images, "Clear contrast" removes it, "Show answer" shows or hides the name of the pattern.
+
 **Quest 3:** press "Enter VR".
 - Left stick: rotate/tilt C-arm; hold the left trigger to move it instead. X: shot. Y: AP/LAT. A: live. B: bones.
 - Grip: pick up the needle from the tray. Push it into the back like a real needle. It pivots at the skin entry point, and deep tissue makes it stiff. The controller buzzes on bone.
 - Let go and the needle stays in. Then the right stick advances or withdraws it slowly. Grip near the hub to take it again; pull back to take it out.
+- Right trigger: inject contrast. Right stick click: hide/show contrast. Left stick click: clear contrast.
 - Point at the screen and hold grip to move the screen.
 
 ## How the C-arm image is made
@@ -49,6 +59,24 @@ Limits: the CT has 1.5 mm voxels, so the image is a little softer than a real C-
 The needle is a 22G spinal needle (0.7 mm). Bone is found from the CT (above 180 HU inside the segmented bones), so the needle stops where the real bone surface is. The needle is drawn into the C-arm image as a steel cylinder with a plastic hub, so a needle in line with the beam shows as a dot inside the hub ring ("hub view").
 
 Limits for now: the needle is straight (no bevel steering or bending), and it passes through soft organs without warning. Complications and contrast come in steps 3 and 4.
+
+## How contrast works
+
+The tip position decides the pattern, using the tissue map:
+
+| Tip in | Pattern |
+|---|---|
+| foramen / epidural space (or within 1.5 mm of it) | epidural / perineural: contrast tracks along the root sleeve and into the epidural space |
+| foramen, but random vascular uptake (20 % lumbar, 40 % S1, rolled once per tip position) | vascular: fast streak (radicular artery with hairpin into the anterior spinal artery, or epidural veins), gone in < 1 s |
+| dural sac, outer 1.5 mm | subdural: thin, one-sided, long cranio-caudal line |
+| dural sac, deeper | intrathecal: myelogram, pools anteriorly (dependent when prone) |
+| disc | intradiscal: nucleogram |
+| muscle / soft tissue | soft tissue: patchy streaks |
+
+Contrast spreads through the matching space over time (a shortest-path flood through the tissue map, 1 mL), is smoothed, and is drawn into the C-arm image like the CT.
+For comparison, a prospective study found intravascular spread in 8.1 % of lumbar and 21.3 % of S1 transforaminal injections (Furman MB et al. *Spine* 2000;25:2628-32, doi:10.1097/00007632-200010150-00014). The trainer uses higher rates on purpose.
+
+The CT does not show nerve roots, so `tools/spine_anatomy.py` builds them: discs (between vertebral bodies), epidural space (4.5 mm ring round the dural sac), foramina (below each pedicle) and the exiting L3, L4 and L5 roots (round the lower border of the pedicle, through the upper foramen, then down and out toward the psoas).
 
 ## Data and credits
 

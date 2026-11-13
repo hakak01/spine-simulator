@@ -15,6 +15,9 @@ uniform vec3 src, detC, detU, detV;  // tube, detector centre and half-axes (mm,
 uniform float stepMM;
 uniform float nOn, nR, nMu;          // needle: on/off, radius (mm), attenuation relative to water
 uniform vec3 nTip, nHub, nHubEnd;    // shaft from tip to hub, plastic hub from nHub to nHubEnd
+uniform sampler3D cTex;              // injected contrast (density 0..1) on a small grid
+uniform float cOn, cMu;              // contrast on/off, attenuation of full-strength contrast vs water
+uniform vec3 cOrigin, cDims;         // grid corner (CT voxel index) and size (voxels)
 in vec2 vUv; out vec4 outColor;
 
 // length of the ray inside a cylinder a-b of radius r
@@ -75,6 +78,27 @@ void main() {
     }
     sum *= stepMM;
   }
+  if (cOn > 0.5) {
+    vec3 cmin = (cOrigin - 0.5) * spacing, cmax = (cOrigin + cDims - 0.5) * spacing;
+    vec3 a0 = (cmin - src) / d, a1 = (cmax - src) / d;
+    vec3 amin = min(a0, a1), amax = max(a0, a1);
+    float cn = max(max(max(amin.x, amin.y), amin.z), 0.0);
+    float cf = min(min(amax.x, amax.y), amax.z);
+    if (cf > cn) {
+      float cstep = 0.75;
+      int m = int((cf - cn) / cstep);
+      vec3 p = src + d * (cn + 0.5 * cstep);
+      vec3 tc = (p / spacing - cOrigin + 0.5) / cDims;
+      vec3 dtc = (d * cstep / spacing) / cDims;
+      float cs = 0.0;
+      for (int i = 0; i < 600; i++) {
+        if (i >= m) break;
+        cs += texture(cTex, tc).r;
+        tc += dtc;
+      }
+      sum += cs * cstep * cMu;
+    }
+  }
   if (nOn > 0.5) {
     sum += min(cylChord(src, d, nTip, nHub, nR) * nMu, 170.0);    // steel shaft
     sum += cylChord(src, d, nHub, nHubEnd, 3.2) * 1.15;           // plastic hub
@@ -98,6 +122,8 @@ export class DRR {
         nOn: { value: 0 }, nR: { value: 0.36 }, nMu: { value: 90 },
         nTip: { value: new THREE.Vector3() }, nHub: { value: new THREE.Vector3(0, 1, 0) },
         nHubEnd: { value: new THREE.Vector3(0, 2, 0) },
+        cTex: { value: null }, cOn: { value: 0 }, cMu: { value: 40 },
+        cOrigin: { value: new THREE.Vector3() }, cDims: { value: new THREE.Vector3(1, 1, 1) },
       },
       depthTest: false, depthWrite: false,
     });
@@ -127,6 +153,15 @@ export class DRR {
     u.nR.value = r;
     u.nMu.value = 90 * (n.radius / r) * (n.radius / r);
     u.nTip.value.copy(n.tip); u.nHub.value.copy(n.hub); u.nHubEnd.value.copy(n.hubEnd);
+  }
+
+  // contrast: Contrast object (see contrast.js)
+  setContrast(c) {
+    const u = this.mat.uniforms, k = c.uniforms();
+    u.cTex.value = c.tex;
+    u.cOn.value = k.on ? 1 : 0;
+    u.cOrigin.value.set(...k.origin);
+    u.cDims.value.set(...k.dims);
   }
 
   // frame: {src, detC, detU, detV} in volume mm. Returns Float32Array of path sums (row 0 = bottom).

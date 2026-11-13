@@ -4,6 +4,7 @@ import { DRR, toImage } from './drr.js';
 import { CArm } from './carm.js';
 import { setupXR } from './xr.js';
 import { Tissue, Needle } from './needle.js';
+import { Contrast, PATTERNS } from './contrast.js';
 
 const $ = (id) => document.getElementById(id);
 const loading = $('loading');
@@ -68,8 +69,8 @@ const carm = new CArm();
 scene.add(carm.model);
 
 // ---------- state ----------
-const state = { lastLive: 0, k: 0.012, shots: 0, liveSec: 0, live: false, bones: false, preset: 'AP', level: 'L4-5', dirty: false, lastMove: 0, hq: true };
-let drr, volToWorld, worldToVol, levels = {}, xr = null, needle = null, skinMesh = null;
+const state = { answer: true, lastLive: 0, k: 0.012, shots: 0, liveSec: 0, live: false, bones: false, preset: 'AP', level: 'L4-5', dirty: false, lastMove: 0, hq: true };
+let drr, volToWorld, worldToVol, levels = {}, xr = null, needle = null, skinMesh = null, contrast = null;
 const fcanvas = $('fluoro');
 const fctx = fcanvas.getContext('2d');
 const off = document.createElement('canvas');
@@ -91,6 +92,7 @@ function volFrame() {
 }
 
 function makeImage(size, step) {
+  if (contrast) drr.setContrast(contrast);
   if (needle && needle.state !== 'none') {
     const tip = needle.tip().applyMatrix4(worldToVol), hub = needle.hub().applyMatrix4(worldToVol);
     const hubEnd = hub.clone().add(hub.clone().sub(tip).normalize().multiplyScalar(20));
@@ -109,6 +111,17 @@ function makeImage(size, step) {
   fctx.fillText(state.live ? 'LIVE' : `#${state.shots}`, fcanvas.width - 12, 24);
   fctx.fillText(carm.flip ? 'flipped' : '', fcanvas.width - 12, fcanvas.height - 12);
   fctx.textAlign = 'left';
+  if (contrast) {
+    let t = '';
+    if (contrast.anim) t = `CONTRAST ${contrast.injectedML().toFixed(1)} mL`;
+    else if (contrast.hidden && contrast.any) t = 'contrast hidden';
+    else if (contrast.last && contrast.last.done && state.answer) {
+      const P = PATTERNS[contrast.last.kind];
+      t = `${P.name} ${P.ok ? '✓' : '✗'}`;
+    }
+    fctx.fillStyle = contrast.anim ? '#ffd27a' : '#9fe3ff';
+    fctx.fillText(t, 12, fcanvas.height - 14);
+  }
   if (xr) xr.onImage();
 }
 
@@ -187,6 +200,55 @@ function boneFeedback() { // mild buzz (Android, Quest) + soft tick (all phones)
     o.connect(g).connect(audio.destination); o.start(); o.stop(audio.currentTime + 0.07);
   } catch (e) { /* no sound */ }
 }
+
+// ---------- contrast ----------
+function injectContrast() {
+  if (!contrast || contrast.anim) return;
+  if (!needle || needle.state !== 'skin' || needle.depth < 2) {
+    $('cread').textContent = 'Put the needle tip in the patient first.';
+    $('cread').className = '';
+    return;
+  }
+  const r = contrast.inject(needle.tip());
+  if (!r) { $('cread').textContent = 'Contrast cannot spread from here.'; return; }
+  $('c-hide').classList.remove('on');
+  state.lastLive = 0;
+  contrastReadout();
+}
+function toggleHideContrast() {
+  if (!contrast) return;
+  contrast.hidden = !contrast.hidden;
+  $('c-hide').classList.toggle('on', contrast.hidden);
+  makeImage(512, 0.75);
+  contrastReadout();
+}
+function clearContrast() {
+  if (!contrast) return;
+  contrast.clear();
+  $('c-hide').classList.remove('on');
+  makeImage(512, 0.75);
+  contrastReadout();
+}
+function contrastReadout() {
+  const el = $('cread');
+  el.className = '';
+  if (!contrast || !contrast.last) { el.textContent = ''; return; }
+  if (contrast.anim) { el.textContent = `Injecting contrast under live fluoro… ${contrast.injectedML().toFixed(1)} / 1.0 mL`; return; }
+  if (!state.answer) { el.textContent = 'Contrast done. Read the pattern yourself (answer hidden).'; return; }
+  const P = PATTERNS[contrast.last.kind];
+  el.className = P.ok ? 'ok' : 'bad';
+  el.textContent = `${P.name} ${P.ok ? '✓' : '✗'} — ${P.text}`
+    + (contrast.last.randomVascular ? ' (Random vascular uptake: it can happen even with a good tip position.)' : '');
+}
+$('c-inject').addEventListener('click', injectContrast);
+$('c-hide').addEventListener('click', toggleHideContrast);
+$('c-clear').addEventListener('click', clearContrast);
+$('c-answer').addEventListener('click', () => {
+  state.answer = !state.answer;
+  $('c-answer').classList.toggle('on', state.answer);
+  contrastReadout();
+  makeImage(512, 0.75);
+});
 
 function needleChanged() {
   state.lastMove = performance.now();
@@ -397,7 +459,12 @@ function tick() {
   held.forEach((k) => HOLD[k](dt));
   heldTap.forEach((k) => TAP[k][1](dt));
   if (xr) xr.update(dt);
-  if (drr && state.live) {
+  if (contrast && contrast.anim) { // contrast injection: live fluoro until it settles
+    contrast.update(dt);
+    state.liveSec += dt;
+    if (!contrast.anim) { makeImage(512, 0.75); contrastReadout(); readout(); }
+    else if (now - state.lastLive > 70) { makeImage(256, 1.2); state.lastLive = now; contrastReadout(); }
+  } else if (drr && state.live) {
     state.liveSec += dt;
     if (state.dirty && now - state.lastLive > 70) { makeImage(256, 1.2); state.dirty = false; state.lastLive = now; }
     else if (!state.hq && now - state.lastMove > 350) { makeImage(512, 0.75); state.hq = true; }
@@ -446,6 +513,7 @@ async function start() {
     needle = new Needle(new Tissue(ct, labels, meta, worldToVol));
     needle.onBone = boneFeedback;
     needle.onChange = needleChanged;
+    contrast = new Contrast(needle.tissue, meta);
     scene.add(needle.model);
 
     const W = (p) => new THREE.Vector3(...p).applyMatrix4(volToWorld);
@@ -469,12 +537,13 @@ async function start() {
     readout();
     xr = await setupXR(renderer, scene, {
       canvas: fcanvas, shot, moveCArm, panCArm, toggleLive, toggleBones, needle,
+      injectContrast, toggleHideContrast, clearContrast,
       tray: new THREE.Vector3(0.38, TABLE_TOP + 0.03, MIDLINE_Z + 0.36),
       togglePreset: () => setPreset(state.preset === 'AP' ? 'LAT' : 'AP'),
       onXR: () => {},
     });
     loading.classList.add('hide');
-    window.sim = { needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
+    window.sim = { contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
   } catch (e) {
     loading.textContent = `Could not start: ${e.message}`;
     console.error(e);

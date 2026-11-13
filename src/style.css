@@ -58,3 +58,9 @@ button.toggle.on.arm { background: #8a6a12; border-color: #d0a52b; }
   button { min-height: 30px; padding: 2px 6px; font-size: 12px; }
   .lbl { font-size: 10px; }
 }
+
+button.inj { background: #23506e; border-color: #3fa7ff; font-weight: 600; }
+button.inj:active { background: #2f6d95; }
+#cread { font-size: 12px; min-height: 16px; color: var(--text); }
+#cread.ok { color: #6fdc8c; }
+#cread.bad { color: #ff8a7a; }
