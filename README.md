@@ -31,7 +31,7 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 - Go to: centre on L3-4, L4-5, L5-S1, sacral hiatus (caudal) or sacrococcygeal junction (impar).
 - SHOT: take one image. LIVE: image updates while you move the C-arm.
 - Save C-arm position / Return to saved (C-arm tab and Setup tab): stores the oblique, tilt and position of the C-arm, and brings the C-arm back to them later. The saved position is kept in the browser, so it survives a page reload.
-- Bones: see-through skin. Flip L/R: mirror the image.
+- View button (B in VR): steps through Skin → Fascia → Muscles → Nerves + vessels → Bones. Flip L/R: mirror the image.
 
 **Needle on the phone** (Needle tab):
 - "Place on skin", then tap the patient's back. The needle starts in line with the C-arm beam.
@@ -61,7 +61,7 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 **Quest 3:** press "Enter VR".
 - Left stick: rotate/tilt C-arm; hold the left trigger to move it instead. X: shot. Y: AP/LAT. A: live. B: bones.
 - Grip: hold the needle (pick it up from the tray). Touch the back with the tip to enter there.
-- Right stick up/down: advance / withdraw (gentle push = slow). Right stick left/right: turn the hub (any needle).
+- Two ways to move it, usable together: (1) by hand: while gripping, push or pull your hand along the needle to advance or withdraw, and move it sideways to aim; (2) by stick: right stick up/down advances / withdraws (gentle push = slow), also when you are not gripping. Right stick left/right: turn the hub (any needle).
 - Under 15 mm your hand re-aims the whole needle. Deeper, your hand only leans the hub and bends the shaft (up to the limit, with a buzz and a message above the screen); withdraw to redirect.
 - Buttons under the C-arm screen and on the left wrist: BENT TIP on/off, BACK TO SKIN.
 - On the C-arm setup panel: SAVE C-ARM POSITION, RETURN TO SAVED, and the "Needle bend" slider (0% rigid pipe to 100% normal).
@@ -91,6 +91,18 @@ Needle sources (from `docs/needle-rules.md`):
 - Drummond & Scott. Deflection of spinal needles by the bevel. Anaesthesia 1980;35(9):854-7
 - Sitzman & Uncles. The effects of needle type, gauge, and tip bend on spinal needle deflection. Anesth Analg 1996;82(2):297-301
 - Webster et al. Nonholonomic modeling of needle steering. Int J Robot Res 2006
+
+## Soft tissues in the 3D views
+
+| Structure | Source |
+|---|---|
+| Dural sac, aorta and iliac arteries, IVC and iliac veins, erector spinae, psoas/iliacus, gluteus maximus and medius | this patient's CT (TotalSegmentator masks), smoothed |
+| Discs | space between the vertebral bodies on the CT |
+| Thoracolumbar fascia | built from the CT as the sheath closed around both erector spinae muscles |
+| Nerve roots L3-L5 with dorsal root ganglion | modelled (CT cannot show them): round the lower border of the pedicle, through the upper foramen |
+| L3 and L4 lumbar segmental arteries | modelled: from the aorta round the waist of the vertebral body to the foramen, where the spinal (radicular) branch joins the root |
+
+Not in the model: ligaments (ligamentum flavum, interspinous), S1 and sacral roots, small veins, fat as a separate layer. The soft tissues are for viewing; the needle still uses the tissue map only for bone and contrast.
 
 ## Data and credits
 
