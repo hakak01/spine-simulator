@@ -92,6 +92,32 @@ Needle sources (from `docs/needle-rules.md`):
 - Sitzman & Uncles. The effects of needle type, gauge, and tip bend on spinal needle deflection. Anesth Analg 1996;82(2):297-301
 - Webster et al. Nonholonomic modeling of needle steering. Int J Robot Res 2006
 
+## How contrast works
+
+The tip position decides the pattern, using the tissue map:
+
+| Tip in | Pattern |
+|---|---|
+| foramen / epidural space (or within 1.5 mm of it) | epidural / perineural: contrast tracks along the root sleeve and into the epidural space |
+| foramen, but random vascular uptake (20 % lumbar, 40 % S1, rolled once per tip position) | vascular: fast streak (radicular artery with hairpin into the anterior spinal artery, or epidural veins), gone in < 1 s |
+| dural sac, outer 1.5 mm | subdural: thin, one-sided, long cranio-caudal line |
+| dural sac, deeper | intrathecal: myelogram, pools anteriorly (dependent when prone) |
+| disc | intradiscal: nucleogram |
+| muscle / soft tissue | soft tissue: patchy streaks |
+
+Contrast spreads through the matching space over time (a shortest-path flood through the tissue map, 1 mL), is smoothed, and is drawn into the C-arm image like the CT.
+For comparison, a prospective study found intravascular spread in 8.1 % of lumbar and 21.3 % of S1 transforaminal injections (Furman MB et al. *Spine* 2000;25:2628-32, doi:10.1097/00007632-200010150-00014). The trainer uses higher rates on purpose.
+
+The CT does not show nerve roots, so `tools/spine_anatomy.py` builds them: discs (between vertebral bodies), epidural space (4.5 mm ring round the dural sac), foramina (below each pedicle) and the exiting L3, L4 and L5 roots (round the lower border of the pedicle, through the upper foramen, then down and out toward the psoas).
+
+## How the setup coach measures
+
+- Endplates: a plane is fitted to the rim of each vertebral body's upper and lower endplate on the CT (the rim is what makes the endplate look like one line on fluoro). "Square" = the beam is within 1.5° of that plane.
+- C-arm movement: the cranio-caudal tilt tilts the whole C and the oblique turns inside it, like a mobile C-arm, so a squared endplate stays (nearly) square when you oblique.
+- True AP: the beam is perpendicular to the line joining the two pedicles of the target vertebra (within 2°).
+- Target ("safe triangle", subpedicular): an open spot in the foramen 1.5-7.5 mm under the pedicle and 0-7 mm behind the posterior vertebral body line that a straight down-the-beam needle can reach with the endplate squared at a 15-35° oblique. On this CT it lies 3-6 mm lateral to the AP 6 o'clock line.
+- Path check: the straight line from the target back along the beam to the skin must not pass through bone.
+
 ## Soft tissues in the 3D views
 
 | Structure | Source |
