@@ -76,3 +76,6 @@ select { background: #26303b; color: var(--text); border: 1px solid var(--line);
 #s-list li { padding-left: 18px; text-indent: -18px; }
 #s-list li.ok { color: #6fdc8c; }
 #s-list li.bad { color: #ffb36b; }
+
+button:disabled { opacity: 0.45; }
+button.goto:not(:disabled) { border-color: #2c9a57; }

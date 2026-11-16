@@ -30,6 +30,7 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 - Move C-arm arrows: shift the field of view.
 - Go to: centre on L3-4, L4-5, L5-S1, sacral hiatus (caudal) or sacrococcygeal junction (impar).
 - SHOT: take one image. LIVE: image updates while you move the C-arm.
+- Save C-arm position / Return to saved (C-arm tab and Setup tab): stores the oblique, tilt and position of the C-arm, and brings the C-arm back to them later. The saved position is kept in the browser, so it survives a page reload.
 - Bones: see-through skin. Flip L/R: mirror the image.
 
 **Needle on the phone** (Needle tab):
@@ -39,6 +40,7 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
   - Deeper, the tissue holds the shaft: the arrows only lean the hub (the outside part bends). The lean is limited (about 20° at 15 mm, 10° at 30 mm, 7° at 45 mm); pushing past it gives a message. The tip turns a little toward the hub, and only while you advance.
   - Every needle drifts away from the bevel while advancing: about 3 mm at 40 mm and 9 mm at 80 mm for a straight needle; "Bent tip" drifts 2.5 x more. The yellow notch on the hub marks the bevel; the readout gives the notch o'clock and the side it drifts to.
   - "Turn hub ⟲ / ⟳" turns the hub one clock hour per tap. A turn of 30° or more restarts the early drift "kick".
+  - "Needle bend" slider: 100% = the rules above. 0% = rigid pipe: no bevel drift, no hub lean, no shaft bend (deeper than 15 mm the needle cannot be redirected at all; withdraw first). Values in between scale the drift, the lean limit and the steering at depth. It applies to the part of the track advanced after the change.
   - Big redirects need withdrawal: "Back to skin" withdraws to 6 mm, and under 15 mm the needle is free to re-aim again.
 - Advance / Withdraw: 1 mm or 5 mm per tap; hold ±1 to keep moving.
 - The needle stops on bone. You get a short vibration (Android) and a soft tick sound. iPhone browsers do not support vibration.
@@ -62,6 +64,7 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 - Right stick up/down: advance / withdraw (gentle push = slow). Right stick left/right: turn the hub (any needle).
 - Under 15 mm your hand re-aims the whole needle. Deeper, your hand only leans the hub and bends the shaft (up to the limit, with a buzz and a message above the screen); withdraw to redirect.
 - Buttons under the C-arm screen and on the left wrist: BENT TIP on/off, BACK TO SKIN.
+- On the C-arm setup panel: SAVE C-ARM POSITION, RETURN TO SAVED, and the "Needle bend" slider (0% rigid pipe to 100% normal).
 - Let go and the needle stays in; the bend springs back to straight. Grip near the hub to take it again. To take it out: withdraw to the skin, then pull your hand back.
 - Right trigger: inject contrast. Right stick click: hide/show contrast. Left stick click: clear contrast.
 - Marker pen: it lies on the tray next to the needle. Hold grip near it to pick it up. Touch the back to draw (light buzz); it slides on the skin and does not go in. Let go while it touches the skin and it stays standing there; take a shot to see its metal tip.

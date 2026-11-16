@@ -81,6 +81,7 @@ export class Needle {
     this.punctures = 0;
     this.curved = false;     // bent tip: drifts BENT_FACTOR x more
     this.bevel = 0;          // notch clock angle, rad: 0 = 12 o'clock (toward the head), clockwise seen from the hub
+    this.flex = 1;           // user setting 0..1: 1 = bends as in the rules, 0 = rigid pipe (no drift, no lean, no bend)
     this.sKick = 0;          // mm advanced since entry or since the hub was last turned >= 30 deg
     this.turnSince = 0;      // hub turn since the kick was last restarted (rad)
     this.onBone = () => {};
@@ -104,7 +105,20 @@ export class Needle {
   }
 
   isDeep() { return this.depth > RULES.FREE_DEPTH; }
-  maxLean() { return RULES.LEAN_MIN + RULES.LEAN_EXTRA * Math.exp(-(this.depth - RULES.FREE_DEPTH) / RULES.LEAN_DECAY); }
+  maxLean() { return this.flex * (RULES.LEAN_MIN + RULES.LEAN_EXTRA * Math.exp(-(this.depth - RULES.FREE_DEPTH) / RULES.LEAN_DECAY)); }
+
+  // how much the needle bends: 0 = rigid pipe, 1 = normal (docs/needle-rules.md)
+  setFlex(f) {
+    this.flex = Math.max(0, Math.min(1, f));
+    if (this.state === 'skin' && this.isDeep()) {   // a lean beyond the new limit is pulled back
+      const max = this.maxLean() * DEG, ang = this.d.angleTo(this.inDir);
+      if (ang > max + 1e-6) {
+        this.q.setFromUnitVectors(this.inDir, this.d);
+        this.d.copy(this.inDir).applyQuaternion(new THREE.Quaternion().slerp(this.q, max / ang)).normalize();
+      }
+    }
+    this.changed();
+  }
   lean() { return this.state === 'skin' ? this.d.angleTo(this.inDir) / DEG : 0; }
 
   setLength(mm) {
@@ -206,7 +220,7 @@ export class Needle {
         if (this.tissue.inBody(nt)) {
           // rule 3: bevel drift, away from the notch (every needle; bent tip x2.5)
           const k = (RULES.DRIFT_BASE + RULES.DRIFT_KICK * Math.exp(-this.sKick / RULES.DRIFT_KICK_MM))
-            * (this.curved ? RULES.BENT_FACTOR : 1);
+            * (this.curved ? RULES.BENT_FACTOR : 1) * this.flex;
           this.notchDir(this.tipDir, away).negate();
           this.turnTip(away, k * STEP);
           // rule 2: at depth the tip turns a little toward the hub, only while advancing
@@ -214,7 +228,7 @@ export class Needle {
             const lean = this.lean();
             if (lean > 0.01) {
               const r = RULES.STEER_BASE * Math.exp(-(this.depth - RULES.FREE_DEPTH) / RULES.STEER_DECAY)
-                * Math.min(1, lean / RULES.STEER_FULL_LEAN);
+                * Math.min(1, lean / RULES.STEER_FULL_LEAN) * this.flex;
               this.turnTip(this.d, r * STEP);
             }
           }

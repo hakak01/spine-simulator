@@ -156,6 +156,40 @@ function panCArm(dx, dy) { // move the field of view right / up on the screen
   carm.iso.addScaledVector(f.detU.normalize(), dx * sx).addScaledVector(f.detV.normalize(), dy);
   changed();
 }
+// ---------- saved C-arm position ----------
+let savedCArm = null;
+try {
+  const j = JSON.parse(localStorage.getItem('savedCArm') || 'null');
+  if (j && Array.isArray(j.iso)) savedCArm = j;
+} catch (e) { /* none */ }
+function savedLabel() {
+  if (!savedCArm) return '';
+  const o = Math.round(savedCArm.obl), t = Math.round(savedCArm.tilt);
+  const ob = Math.abs(o) >= 88 ? 'LAT' : o === 0 ? 'AP' : `OBL ${Math.abs(o)}° ${o > 0 ? 'L' : 'R'}`;
+  return ob + (t === 0 ? '' : ` · TILT ${Math.abs(t)}° ${t > 0 ? 'CRAN' : 'CAUD'}`);
+}
+function savedRefresh() {
+  document.querySelectorAll('[data-carm="goto"]').forEach((b) => {
+    b.disabled = !savedCArm;
+    b.textContent = savedCArm ? `Return to saved (${savedLabel()})` : 'Return to saved';
+  });
+  if (xr && xr.savedChanged) xr.savedChanged(savedCArm ? savedLabel() : '');
+}
+function saveCArm() {
+  savedCArm = { obl: carm.obl, tilt: carm.tilt, iso: carm.iso.toArray() };
+  try { localStorage.setItem('savedCArm', JSON.stringify(savedCArm)); } catch (e) { /* ignore */ }
+  savedRefresh();
+  $('readout').textContent = `C-arm position saved: ${savedLabel()}`;
+}
+function gotoSavedCArm() {
+  if (!savedCArm) return false;
+  carm.obl = savedCArm.obl; carm.tilt = savedCArm.tilt; carm.iso.fromArray(savedCArm.iso);
+  changed();
+  return true;
+}
+document.querySelectorAll('[data-carm="save"]').forEach((b) => b.addEventListener('click', saveCArm));
+document.querySelectorAll('[data-carm="goto"]').forEach((b) => b.addEventListener('click', gotoSavedCArm));
+
 function setPreset(p) {
   state.preset = p;
   if (p === 'AP') { carm.obl = 0; carm.tilt = 0; }
@@ -340,7 +374,8 @@ function needleReadout() {
   const parts = [ang(a.cranial, 'to head', 'to feet'), ang(a.left, 'to left', 'to right')].filter(Boolean).join(', ') || 'straight down';
   const notch = needle.notchClock();
   const away = ((notch + 5) % 12) + 1;
-  let t = `Depth ${needle.depth.toFixed(1)} mm of ${needle.length}  ·  ${parts}  ·  notch ${notch} o'clock (drifts toward ${away})`
+  const drift = needle.flex === 0 ? 'no drift: rigid' : `drifts toward ${away}${needle.flex < 1 ? `, bend ${Math.round(needle.flex * 100)}%` : ''}`;
+  let t = `Depth ${needle.depth.toFixed(1)} mm of ${needle.length}  ·  ${parts}  ·  notch ${notch} o'clock (${drift})`
     + `${needle.curved ? '  ·  bent tip' : ''}  ·  skin punctures ${needle.punctures}`;
   if (needle.state === 'skin' && needle.isDeep()) t += `  ·  hub lean ${needle.lean().toFixed(1)}° of max ${needle.maxLean().toFixed(0)}°`;
   if (needle.boneContact) t += '  ·  BONE CONTACT';
@@ -365,7 +400,9 @@ function needleLimit() {
   const now = performance.now();
   if (now - lastLimitMsg < RULES.LIMIT_MSG_SEC * 1000) return;
   lastLimitMsg = now;
-  hint('Deep tissue is holding the needle: the shaft bends but the tip hardly turns. Withdraw to under 15 mm to redirect.', RULES.LIMIT_MSG_SEC);
+  hint(needle.flex === 0
+    ? 'Rigid needle (bend 0%): deep tissue holds it and it cannot bend. Withdraw to under 15 mm to redirect.'
+    : 'Deep tissue is holding the needle: the shaft bends but the tip hardly turns. Withdraw to under 15 mm to redirect.', RULES.LIMIT_MSG_SEC);
 }
 function deepArrowHint() {
   if (deepHintShown || !needle.isDeep()) return;
@@ -427,6 +464,14 @@ function setCurved(on) {
 }
 $('n-curve').addEventListener('click', () => setCurved(!needle.curved));
 $('n-back').addEventListener('click', () => needle.backToSkin());
+// needle bend: 0 % = rigid pipe (no drift, no lean, no bend), 100 % = normal (the needle rules)
+function setFlex(pct) {
+  pct = Math.max(0, Math.min(100, Math.round(pct / 5) * 5));
+  needle.setFlex(pct / 100);
+  $('sl-flex').value = pct;
+  $('sv-flex').textContent = pct === 0 ? '0% rigid' : pct === 100 ? '100% normal' : `${pct}%`;
+}
+$('sl-flex').addEventListener('input', (e) => setFlex(+e.target.value));
 TAP.spinL = [() => needle.spin(-Math.PI / 6), (dt) => needle.spin(-Math.PI / 2 * dt)];
 TAP.spinR = [() => needle.spin(Math.PI / 6), (dt) => needle.spin(Math.PI / 2 * dt)];
 
@@ -725,13 +770,14 @@ async function start() {
     xr = await setupXR(renderer, scene, {
       canvas: fcanvas, shot, moveCArm, panCArm, toggleLive, toggleBones, needle,
       injectContrast, toggleHideContrast, clearContrast, pen,
-      setCurved, carm, setup, setRoot, setSide, setPlate, setTilt, setObl, setAlong, along, setupCentre, setupCheck,
+      setCurved, setFlex, saveCArm, gotoSavedCArm, carm, setup, setRoot, setSide, setPlate, setTilt, setObl, setAlong, along, setupCentre, setupCheck,
       tray: new THREE.Vector3(0.38, TABLE_TOP + 0.03, MIDLINE_Z + 0.36),
       togglePreset: () => setPreset(state.preset === 'AP' ? 'LAT' : 'AP'),
       onXR: () => {},
     });
+    savedRefresh();
     loading.classList.add('hide');
-    window.sim = { setCurved, setup, setupCentre, setupCheck, setRoot, setSide, setTilt, setObl, setAlong, xr, pen, setPenMode, skinHit, contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
+    window.sim = { setFlex, saveCArm, gotoSavedCArm, setCurved, setup, setupCentre, setupCheck, setRoot, setSide, setTilt, setObl, setAlong, xr, pen, setPenMode, skinHit, contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
   } catch (e) {
     loading.textContent = `Could not start: ${e.message}`;
     console.error(e);

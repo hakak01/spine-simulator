@@ -54,7 +54,9 @@ export class VRPanel {
         g.fillStyle = on ? '#1f6f3f' : hot ? '#46586c' : '#2a3542';
         g.strokeStyle = hot ? '#ffe066' : on ? '#2c9a57' : '#4a5a6c'; g.lineWidth = hot ? 5 : 3;
         g.beginPath(); g.roundRect(k.x, k.y, k.w, k.h, 14); g.fill(); g.stroke();
-        g.fillStyle = '#fff'; g.font = `bold ${Math.round(k.h * 0.42)}px sans-serif`;
+        let fs = Math.round(k.h * 0.42);
+        g.fillStyle = '#fff'; g.font = `bold ${fs}px sans-serif`;
+        while (fs > 12 && g.measureText(k.label).width > k.w - 16) { fs -= 2; g.font = `bold ${fs}px sans-serif`; }
         g.textAlign = 'center'; g.textBaseline = 'middle';
         g.fillText(k.label, k.x + k.w / 2, k.y + k.h / 2 + 1);
       } else {

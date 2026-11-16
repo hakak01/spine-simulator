@@ -32,6 +32,10 @@
       <div class="grp" id="levels"><span class="lbl">Go to</span></div>
       <button id="flip" class="toggle">Flip L/R</button>
     </div>
+    <div class="row">
+      <button data-carm="save">Save C-arm position</button>
+      <button data-carm="goto" class="goto" disabled>Return to saved</button>
+    </div>
   </div>
   <div class="tab hide" id="tab-needle">
     <div class="row">
@@ -54,6 +58,9 @@
       <div class="grp"><span class="lbl">Advance</span><button data-tap="in1">+1</button><button data-tap="in5">+5</button><span class="lbl">mm</span></div>
     </div>
     <div id="nread">Tap "Place on skin", then tap the patient's back.</div>
+    <div class="sliders">
+      <label><span>Needle bend</span><input type="range" id="sl-flex" min="0" max="100" step="5" value="100"><b id="sv-flex">100% normal</b></label>
+    </div>
     <div id="nnote">Needle drift follows bench studies (gel, meat, pig muscle), not living patients. The 15 mm free-pivot depth, lean limits and steering at depth are estimates.</div>
     <div class="row">
       <button id="c-inject" class="inj">Inject contrast 1 mL</button>
@@ -82,6 +89,7 @@
     </div>
     <div class="row">
       <button id="s-centre">Centre on target</button><button id="s-ap">AP check</button><button id="s-lat">Lateral check</button>
+      <button data-carm="save">Save C-arm</button><button data-carm="goto" class="goto" disabled>Return to saved</button>
     </div>
     <div class="sliders">
       <label><span>Tilt</span><input type="range" id="sl-tilt" min="-45" max="45" step="0.5"><b id="sv-tilt"></b></label>

@@ -112,7 +112,7 @@ export async function setupXR(renderer, scene, ctx) {
   }
 
   // ----- C-arm setup panel (left of the screen; moves with it) -----
-  const panel = new VRPanel(768, 1180, 0.4);
+  const panel = new VRPanel(768, 1400, 0.4);
   panel.title = 'C-ARM SETUP  (transforaminal)';
   const fmtDeg = (pos, neg) => (v) => (Math.abs(v) < 0.25 ? '0°' : `${Math.abs(v).toFixed(1)}° ${v > 0 ? pos : neg}`);
   ['L3', 'L4', 'L5'].forEach((r, i) => panel.button(`root${r}`, 24 + i * 112, 72, 100, 62, `${r} root`, () => ctx.setRoot(r), () => ctx.setup.root === r));
@@ -128,12 +128,19 @@ export async function setupXR(renderer, scene, ctx) {
   panel.button('shot', 576, 500, 168, 70, 'SHOT', () => ctx.shot());
   panel.button('plate', 24, 584, 720, 56, '', () => ctx.setPlate(ctx.setup.plate === 'upper' ? 'lower' : 'upper'));
   const plateBtn = panel.widgets.find((k) => k.id === 'plate');
-  panel.textTop = 690;
+  let savedTxt = '';
+  panel.button('savepos', 24, 654, 352, 62, 'SAVE C-ARM POSITION', () => ctx.saveCArm());
+  panel.button('gotopos', 392, 654, 352, 62, 'RETURN TO SAVED', () => { if (!ctx.gotoSavedCArm()) say('No C-arm position saved yet. Press SAVE C-ARM POSITION first.', 3); });
+  const gotoBtn = panel.widgets.find((k) => k.id === 'gotopos');
+  panel.slider('flex', 50, 790, 668, 50, 'Needle bend', 0, 100, () => needle.flex * 100, (v) => ctx.setFlex(v),
+    (v) => (v < 2.5 ? '0% (rigid pipe, no drift)' : v > 97.5 ? '100% (normal)' : `${Math.round(v / 5) * 5}%`));
+  panel.textTop = 890;
   const redrawPanel = () => {
+    gotoBtn.label = savedTxt ? `RETURN: ${savedTxt}` : 'RETURN TO SAVED';
     plateBtn.label = ctx.setup.plate === 'upper' ? 'SQUARE: lower endplate of upper vertebra' : 'SQUARE: upper endplate of lower vertebra';
     panel.draw();
   };
-  panel.mesh.position.set(-0.5, -0.12, 0.04);
+  panel.mesh.position.set(-0.5, -0.17, 0.04);
   panel.mesh.rotation.y = 0.35;
   monitor.add(panel.mesh);
   redrawPanel();
@@ -397,5 +404,6 @@ export async function setupXR(renderer, scene, ctx) {
 
   const setupChanged = (lines) => { panel.lines = lines; redrawPanel(); };
   const curvedChanged = () => { bars.forEach((b) => { b.labels.curve = needle.curved ? 'BENT TIP: ON' : null; b.draw(); }); };
-  return { update, buzz, say, setupChanged, curvedChanged, onImage: () => { tex.needsUpdate = true; }, monitor, monBar, wristBar, panel };
+  const savedChanged = (t) => { savedTxt = t; redrawPanel(); };
+  return { update, buzz, say, setupChanged, curvedChanged, savedChanged, onImage: () => { tex.needsUpdate = true; }, monitor, monBar, wristBar, panel };
 }
