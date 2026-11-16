@@ -36,6 +36,7 @@ import fast_simplification
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import spine_anatomy  # noqa: E402
+import soft_tissue  # noqa: E402
 
 URL = "https://zenodo.org/records/10047263/files/Totalsegmentator_dataset_small_v201.zip?download=1"
 CASE = "s0461"
@@ -179,6 +180,10 @@ def main():
         f.write(np.ascontiguousarray(lab.transpose(2, 1, 0)).tobytes())
     print(f"  labels_u8.bin.gz: {os.path.getsize(os.path.join(OUT, 'labels_u8.bin.gz'))/1e6:.2f} MB")
 
+    # 4c. soft-tissue meshes for the see-through views (see tools/soft_tissue.py)
+    soft = soft_tissue.build(load, sl, body, lab, hu, verts, anatomy, sp, mesh,
+                             lambda name, v, f: save_mesh(os.path.join(OUT, name), v, f))
+
     # 5. landmarks (mm in cropped volume frame, index*spacing)
     lm = {}
     for lv in ["L2", "L3", "L4", "L5"]:
@@ -202,6 +207,7 @@ def main():
                    "10": "disc", "11": "epidural space", "12": "nerve root", "13": "foramen / periradicular fat"},
         "landmarks": lm,
         "anatomy": anatomy,
+        "soft": soft,
     }
     with open(os.path.join(OUT, "ct.json"), "w") as f:
         json.dump(meta, f, indent=1, default=float)

@@ -59,9 +59,9 @@ export async function setupXR(renderer, scene, ctx) {
   hctx.fillStyle = '#cfe8ff'; hctx.font = '27px sans-serif';
   [
     'LEFT stick: rotate / tilt C-arm (hold left trigger: move it)',
-    'X: shot    Y: AP / LAT    A: live on/off    B: show bones',
-    'GRIP: hold the needle. Touch the skin to enter. Hand aims it (under 15 mm)',
-    'RIGHT stick up/down: advance / withdraw.  Left/right: turn the hub',
+    'X: shot    Y: AP / LAT    A: live on/off    B: next view (anatomy)',
+    'GRIP: hold the needle. Move your hand to aim, push in or pull out',
+    'or RIGHT stick up/down: advance / withdraw.  Left/right: turn the hub',
     'Deep (over 15 mm) the hand only leans the hub: withdraw to redirect',
     'RIGHT TRIGGER: inject contrast (1 mL, live fluoro)',
     'Right stick click: hide / show contrast   Left stick click: clear it',
@@ -231,7 +231,7 @@ export async function setupXR(renderer, scene, ctx) {
   const pos = new THREE.Vector3(), fwd = new THREE.Vector3(), H = new THREE.Vector3();
   const v = new THREE.Vector3(), p = new THREE.Vector3(), nd = new THREE.Vector3();
   const grabOff = new THREE.Vector3();
-  let grabbedBy = null, heldNeedle = null, heldPen = null, lastTick = 0, sliding = null;
+  let grabbedBy = null, heldNeedle = null, heldPen = null, lastTick = 0, sliding = null, resync = false;
   const plane = new THREE.Plane(), hitP = new THREE.Vector3(), nrm = new THREE.Vector3();
   const dz = (x) => (Math.abs(x) < 0.15 ? 0 : x);
 
@@ -242,29 +242,40 @@ export async function setupXR(renderer, scene, ctx) {
     H.copy(pos).addScaledVector(fwd, HAND_OFFSET);
   }
 
-  // Holding the needle (docs/needle-rules.md):
-  //  - in the air it follows the hand; when the tip touches the skin it enters there;
-  //  - under 15 mm the hand re-aims the whole needle; deeper, the hub only leans (shaft bends);
-  //  - depth: right stick up/down; hub turn: right stick left/right.
-  function holdNeedle() {
+  // Holding the needle (docs/needle-rules.md), two ways at the same time:
+  //  - by hand: grip the needle and move it. Under 15 mm the hand re-aims the whole needle;
+  //    deeper it only leans the hub (the shaft bends). Pushing / pulling the hand along the
+  //    needle advances / withdraws it.
+  //  - by stick: right stick up/down advances / withdraws, left/right turns the hub.
+  const HAND_DEAD = 0.6;   // mm of hand movement ignored (hand tremor)
+  const HAND_SPEED = 250;  // mm/s at most
+  function holdNeedle(dt) {
     const T = needle.tissue, L = needle.length;
     if (needle.state !== 'skin') {
+      // in the air the needle follows the hand; when the tip reaches the skin it enters there
       needle.setFree(H, fwd);
       const tip = needle.tip(v);
       if (!T.inBody(tip) || T.inBody(H)) return;
       let s = 0;
       for (; s <= L; s += 0.5) { if (T.inBody(p.copy(H).addScaledVector(fwd, s * 0.001))) break; }
       needle.place(p.clone(), fwd);
-      grabOff.copy(needle.hub(v)).sub(H);       // keep the hub where it is relative to the hand
+      grabOff.set(0, 0, 0);
+      resync = false;
       return;
     }
+    if (resync) { grabOff.copy(needle.hub(v)).sub(H); resync = false; }  // the stick moved it: keep the hand in step
     H.add(grabOff);
     v.copy(needle.E).sub(H);
     const dist = v.length();
     if (dist > 1e-4) needle.aim(v.multiplyScalar(1 / dist));
-    // tip still at the skin and the hand pulls back 2 cm: the needle comes out
-    const along = v.copy(needle.E).sub(H).dot(needle.d) * 1000;
-    if (needle.depth < 1 && along > (L - needle.depth) + 20) { grabOff.set(0, 0, 0); needle.setFree(H, needle.d.clone()); }
+    // depth follows the hand along the needle
+    const want = L - v.copy(needle.E).sub(H).dot(needle.d) * 1000;
+    if (want < -8 && needle.depth < 1) { grabOff.set(0, 0, 0); needle.setFree(H, needle.d.clone()); return; } // pulled out
+    const delta = want - needle.depth;
+    if (Math.abs(delta) > HAND_DEAD) {
+      const max = HAND_SPEED * dt;
+      needle.advance(Math.max(-max, Math.min(max, delta - Math.sign(delta) * HAND_DEAD)));
+    }
   }
 
   // pen in the hand: it follows the controller, cannot go into the skin, and draws where it touches
@@ -358,7 +369,7 @@ export async function setupXR(renderer, scene, ctx) {
         if (edge(5)) ctx.togglePreset();
         if (edge(3)) ctx.clearContrast();     // left stick click
       } else {
-        if (ay && needle.state === 'skin') needle.advance(-ay * Math.abs(ay) * 20 * dt); // right stick: advance / withdraw (fine near centre)
+        if (ay && needle.state === 'skin') { needle.advance(-ay * Math.abs(ay) * 20 * dt); resync = true; } // right stick: advance / withdraw (fine near centre)
         if (ax && needle.state !== 'none') needle.spin(ax * Math.PI / 2 * dt); // right stick: turn the hub
         if (edge(4)) ctx.toggleLive();
         if (edge(5)) ctx.toggleBones();
@@ -380,7 +391,7 @@ export async function setupXR(renderer, scene, ctx) {
         if (heldNeedle === c) { heldNeedle = null; if (needle.state !== 'skin') park(); }
         if (heldPen === c) { heldPen = null; pen.lift(); if (pen.touching) pen.setPose(pen.tip, pen.dir, 'rest'); else parkPen(); }
       }
-      if (heldNeedle === c) holdNeedle();
+      if (heldNeedle === c) holdNeedle(dt);
       if (heldPen === c) holdPen(c);
       prev.set(c, pressed);
     }

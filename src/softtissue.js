@@ -1,0 +1,100 @@
+// Soft tissues for the see-through views: dural sac, nerve roots, arteries, veins,
+// discs, muscles and the thoracolumbar fascia. Meshes come from this patient's CT
+// (tools/soft_tissue.py); nerve roots and lumbar segmental arteries are modelled.
+import * as THREE from 'three';
+
+export const VIEWS = [
+  { name: 'Skin', skin: 1, show: [] },
+  { name: 'Fascia', skin: 0.1, show: ['fascia', 'psoas', 'gluteal', 'sac', 'roots', 'arteries', 'veins', 'discs', 'bone'] },
+  { name: 'Muscles', skin: 0.1, show: ['erector', 'psoas', 'gluteal', 'sac', 'roots', 'arteries', 'veins', 'discs', 'bone'] },
+  { name: 'Nerves + vessels', skin: 0.1, show: ['sac', 'roots', 'arteries', 'veins', 'discs', 'bone'] },
+  { name: 'Bones', skin: 0.22, show: ['bone'] },
+];
+
+const MATS = {
+  sac: { color: 0xe9dfa6, roughness: 0.5, transparent: true, opacity: 0.6, depthWrite: false },
+  roots: { color: 0xf2cf3a, roughness: 0.45 },
+  arteries: { color: 0xc8322b, roughness: 0.4 },
+  veins: { color: 0x3558b8, roughness: 0.45 },
+  discs: { color: 0xa9c9d8, roughness: 0.6 },
+  erector: { color: 0x9a3a33, roughness: 0.75 },
+  psoas: { color: 0xa2443b, roughness: 0.75 },
+  gluteal: { color: 0x8f3630, roughness: 0.8 },
+  fascia: { color: 0xe8e3d6, roughness: 0.35, metalness: 0.05 },
+};
+
+export class SoftTissue {
+  constructor(patient, skinMat, boneMesh) {
+    this.patient = patient;
+    this.skinMat = skinMat;
+    this.parts = { bone: boneMesh };
+    this.view = 0;
+  }
+
+  // load in the background; the app works without it
+  async load(meta, fetchBin, meshGeometry) {
+    const soft = meta.soft;
+    if (!soft) return;
+    const add = (name, geom) => {
+      const m = new THREE.Mesh(geom, new THREE.MeshStandardMaterial(MATS[name] || MATS.erector));
+      if (name === 'sac') m.renderOrder = 2;
+      this.parts[name] = m;
+      this.patient.add(m);
+    };
+    await Promise.all(Object.entries(soft.files).map(async ([name, file]) => {
+      try { add(name, meshGeometry(await fetchBin(`data/${file}`))); } catch (e) { console.warn('soft tissue', name, e.message); }
+    }));
+    // nerve roots (modelled): a tube along each root, thicker at the dorsal root ganglion
+    const roots = new THREE.Group();
+    const rootMat = new THREE.MeshStandardMaterial(MATS.roots);
+    for (const lv of Object.values(meta.anatomy.roots)) {
+      for (const pts of Object.values(lv)) {
+        const P = pts.map((p) => new THREE.Vector3(...p));
+        const start = P[0].clone().add(P[0].clone().sub(P[1]).setLength(4));   // begins inside the sac
+        const curve = new THREE.CatmullRomCurve3([start, ...P]);
+        roots.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 28, 2.4, 8, false), rootMat));
+        const drg = new THREE.Mesh(new THREE.SphereGeometry(3.6, 12, 10), rootMat);
+        drg.position.copy(P[2]);
+        drg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), P[3].clone().sub(P[1]).normalize());
+        drg.scale.set(1, 1.7, 1);
+        roots.add(drg);
+        const end = new THREE.Mesh(new THREE.SphereGeometry(2.4, 8, 6), rootMat);
+        end.position.copy(P[P.length - 1]);
+        roots.add(end);
+      }
+    }
+    this.parts.roots = roots;
+    this.patient.add(roots);
+    // lumbar segmental arteries (modelled), joined to the real arteries
+    if (soft.lumbar_arteries && this.parts.arteries) {
+      const g = new THREE.Group();
+      g.add(this.parts.arteries);
+      for (const lv of Object.values(soft.lumbar_arteries)) {
+        for (const pts of Object.values(lv)) {
+          const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)));
+          g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 36, 1.1, 6, false), this.parts.arteries.material));
+        }
+      }
+      this.parts.arteries = g;
+      this.patient.add(g);
+    }
+    this.apply();
+  }
+
+  setView(i) {
+    this.view = ((i % VIEWS.length) + VIEWS.length) % VIEWS.length;
+    this.apply();
+    return VIEWS[this.view].name;
+  }
+
+  apply() {
+    const v = VIEWS[this.view], m = this.skinMat;
+    m.transparent = v.skin < 1;
+    m.opacity = v.skin;
+    m.depthWrite = v.skin >= 1;
+    m.needsUpdate = true;
+    for (const [name, obj] of Object.entries(this.parts)) {
+      obj.visible = v.skin >= 1 ? name === 'bone' : v.show.includes(name);
+    }
+  }
+}

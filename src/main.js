@@ -7,6 +7,7 @@ import { Tissue, Needle, RULES } from './needle.js';
 import { Contrast, PATTERNS } from './contrast.js';
 import { Pen } from './pen.js';
 import { Setup } from './setup.js';
+import { SoftTissue, VIEWS } from './softtissue.js';
 
 const $ = (id) => document.getElementById(id);
 const loading = $('loading');
@@ -211,14 +212,17 @@ function toggleLive() {
   if (state.live) { state.dirty = true; state.hq = false; }
   readout();
 }
-function toggleBones() {
-  state.bones = !state.bones;
-  $('bones').classList.toggle('on', state.bones);
-  skinMat.transparent = state.bones;
-  skinMat.opacity = state.bones ? 0.22 : 1;
-  skinMat.depthWrite = !state.bones;
-  skinMat.needsUpdate = true;
+// see-through views: Skin -> Fascia -> Muscles -> Nerves + vessels -> Bones -> Skin
+let soft = null;
+function setView(i) {
+  if (!soft) return;
+  const name = soft.setView(i);
+  state.view = soft.view;
+  $('bones').classList.toggle('on', soft.view > 0);
+  $('bones').textContent = `View: ${name}`;
+  if (xr && xr.say && renderer.xr.isPresenting) xr.say(`View: ${name}`, 2);
 }
+function toggleBones() { setView((soft ? soft.view : 0) + 1); }
 function readout() {
   $('readout').textContent = `${carm.label()}  ·  centre: ${state.level}  ·  shots ${state.shots}  ·  live ${state.liveSec.toFixed(1)} s`;
 }
@@ -732,7 +736,11 @@ async function start() {
     patient.matrixAutoUpdate = false;
     patient.matrix.copy(volToWorld);
     skinMesh = new THREE.Mesh(skinG, skinMat);
-    patient.add(skinMesh, new THREE.Mesh(boneG, boneMat));
+    skinMesh.renderOrder = 5;                      // see-through skin is drawn after what lies under it
+    const boneMesh = new THREE.Mesh(boneG, boneMat);
+    patient.add(skinMesh, boneMesh);
+    soft = new SoftTissue(patient, skinMat, boneMesh);
+    soft.load(meta, fetchBin, meshGeometry).catch((e) => console.warn('soft tissue', e));
     scene.add(patient);
     patient.updateMatrixWorld(true);
 
@@ -777,7 +785,7 @@ async function start() {
     });
     savedRefresh();
     loading.classList.add('hide');
-    window.sim = { setFlex, saveCArm, gotoSavedCArm, setCurved, setup, setupCentre, setupCheck, setRoot, setSide, setTilt, setObl, setAlong, xr, pen, setPenMode, skinHit, contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
+    window.sim = { controls, soft, setView, VIEWS, setFlex, saveCArm, gotoSavedCArm, setCurved, setup, setupCentre, setupCheck, setRoot, setSide, setTilt, setObl, setAlong, xr, pen, setPenMode, skinHit, contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
   } catch (e) {
     loading.textContent = `Could not start: ${e.message}`;
     console.error(e);
