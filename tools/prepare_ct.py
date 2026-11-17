@@ -37,6 +37,7 @@ import fast_simplification
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import spine_anatomy  # noqa: E402
 import soft_tissue  # noqa: E402
+import sacral  # noqa: E402
 
 URL = "https://zenodo.org/records/10047263/files/Totalsegmentator_dataset_small_v201.zip?download=1"
 CASE = "s0461"
@@ -176,6 +177,9 @@ def main():
     # discs, epidural space, foramina, exiting nerve roots (see tools/spine_anatomy.py)
     verts = {v: load("vertebrae_" + v)[sl] for v in ["L2", "L3", "L4", "L5", "S1"]}
     anatomy = spine_anatomy.build(lab, load("spinal_cord")[sl] & body, verts, sp, hu)
+    # sacral canal, hiatus, ligament, sacral foramina and roots (see tools/sacral.py)
+    anatomy["sacral"] = sacral.build(lab, hu, (load("sacrum") | load("vertebrae_S1"))[sl] & body,
+                                     load("spinal_cord")[sl] & body, verts, sp, anatomy)
     with gzip.GzipFile(os.path.join(OUT, "labels_u8.bin.gz"), "wb", compresslevel=9, mtime=0) as f:
         f.write(np.ascontiguousarray(lab.transpose(2, 1, 0)).tobytes())
     print(f"  labels_u8.bin.gz: {os.path.getsize(os.path.join(OUT, 'labels_u8.bin.gz'))/1e6:.2f} MB")
@@ -204,7 +208,8 @@ def main():
         "encoding": "uint8, HU = v*10 - 1000, x fastest; axes: +x patient right, +y anterior, +z superior",
         "labels": {"0": "air", "1": "soft tissue", "2": "bone", "3": "spinal canal", "4": "artery",
                    "5": "vein", "6": "bowel", "7": "muscle", "8": "kidney", "9": "bladder/prostate",
-                   "10": "disc", "11": "epidural space", "12": "nerve root", "13": "foramen / periradicular fat"},
+                   "10": "disc", "11": "epidural space", "12": "nerve root", "13": "foramen / periradicular fat",
+                   "14": "sacral canal (epidural)", "15": "sacrococcygeal ligament"},
         "landmarks": lm,
         "anatomy": anatomy,
         "soft": soft,

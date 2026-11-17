@@ -5,9 +5,9 @@ import * as THREE from 'three';
 
 export const VIEWS = [
   { name: 'Skin', skin: 1, show: [] },
-  { name: 'Fascia', skin: 0.1, show: ['fascia', 'psoas', 'gluteal', 'sac', 'roots', 'arteries', 'veins', 'discs', 'bone'] },
-  { name: 'Muscles', skin: 0.1, show: ['erector', 'psoas', 'gluteal', 'sac', 'roots', 'arteries', 'veins', 'discs', 'bone'] },
-  { name: 'Nerves + vessels', skin: 0.1, show: ['sac', 'roots', 'arteries', 'veins', 'discs', 'bone'] },
+  { name: 'Fascia', skin: 0.1, show: ['fascia', 'ligament', 'psoas', 'gluteal', 'sac', 'roots', 'arteries', 'veins', 'discs', 'bone'] },
+  { name: 'Muscles', skin: 0.1, show: ['erector', 'ligament', 'psoas', 'gluteal', 'sac', 'roots', 'arteries', 'veins', 'discs', 'bone'] },
+  { name: 'Nerves + vessels', skin: 0.1, show: ['sac', 'ligament', 'roots', 'arteries', 'veins', 'discs', 'bone'] },
   { name: 'Bones', skin: 0.22, show: ['bone'] },
 ];
 
@@ -21,6 +21,7 @@ const MATS = {
   psoas: { color: 0xa2443b, roughness: 0.75 },
   gluteal: { color: 0x8f3630, roughness: 0.8 },
   fascia: { color: 0xe8e3d6, roughness: 0.35, metalness: 0.05 },
+  ligament: { color: 0xf4f1e6, roughness: 0.4 },
 };
 
 export class SoftTissue {
@@ -63,8 +64,30 @@ export class SoftTissue {
         roots.add(end);
       }
     }
+    // sacral roots S1-S4 (modelled): canal -> foramen -> in front of the sacrum
+    const S = meta.anatomy.sacral;
+    if (S) {
+      for (const lv of Object.values(S.roots)) {
+        for (const pts of Object.values(lv)) {
+          const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)));
+          roots.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 20, 1.9, 8, false), rootMat));
+        }
+      }
+    }
     this.parts.roots = roots;
     this.patient.add(roots);
+    // sacral epidural veins (modelled), joined to the real veins
+    if (S && this.parts.veins) {
+      const g = new THREE.Group();
+      g.add(this.parts.veins);
+      for (const pts of S.veins) {
+        if (pts.length < 2) continue;
+        const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)));
+        g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, pts.length * 6, 0.9, 6, false), this.parts.veins.material));
+      }
+      this.parts.veins = g;
+      this.patient.add(g);
+    }
     // lumbar segmental arteries (modelled), joined to the real arteries
     if (soft.lumbar_arteries && this.parts.arteries) {
       const g = new THREE.Group();

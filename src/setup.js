@@ -19,6 +19,7 @@ export class Setup {
     this.root = 'L4';
     this.side = 'L';          // patient's left / right
     this.plate = 'upper';     // 'upper' = lower endplate of the upper vertebra, 'lower' = upper endplate of the lower one
+    this.proc = 'tfesi';      // 'tfesi' (transforaminal) | 'caudal'
     this.lin = new THREE.Matrix3().setFromMatrix4(worldToVol);
     this.cache = null;
   }
@@ -87,7 +88,75 @@ export class Setup {
   }
 
   // ---- C-arm actions ----
-  centre() { this.carm.iso.copy(this.targetWorld()); }
+  centre() { this.carm.iso.copy(this.proc === 'caudal' ? this.hiatusWorld() : this.targetWorld()); }
+
+  // ---- caudal ----
+  // C-arm centre for the caudal block: midline, at the sacral canal, at the hiatus
+  hiatusWorld() {
+    const S = this.anat.sacral;
+    return this.toWorld([S.midline_x, S.hiatus_centre[1], S.hiatus_centre[2]]);
+  }
+
+  // distance (mm) along the sacral canal from the tip up to the end of the dural sac (+ = tip below the sac),
+  // measured along a smoothed canal centre line (side view: height and depth)
+  belowSac(t) {
+    const S = this.anat.sacral;
+    const raw = S.canal_axis.map((p) => [p[1], p[2]]);
+    const ax = raw.map((p, i) => {
+      const a = raw[Math.max(0, i - 1)], c = raw[Math.min(raw.length - 1, i + 1)];
+      return [(a[0] + p[0] + c[0]) / 3, (a[1] + p[1] + c[1]) / 3];
+    });
+    ax.push([S.sac_end[1], S.sac_end[2]]);
+    if (t.z >= S.sac_end[2]) return -(t.z - S.sac_end[2]);
+    let best = 0, bd = 1e9;
+    for (let i = 0; i < ax.length; i++) { const d = Math.hypot(ax[i][0] - t.y, ax[i][1] - t.z); if (d < bd) { bd = d; best = i; } }
+    let s = 0;
+    for (let i = best; i < ax.length - 1; i++) s += Math.hypot(ax[i + 1][0] - ax[i][0], ax[i + 1][1] - ax[i][1]);
+    return s;
+  }
+
+  sacralLevel(z) {
+    const L = this.anat.sacral.level_z, names = Object.keys(L);
+    const low = Math.min(...names.map((n) => L[n]));
+    if (z < low - 12) return 'S5';
+    return names.reduce((a, b) => (Math.abs(L[a] - z) <= Math.abs(L[b] - z) ? a : b));
+  }
+
+  caudalLines() {
+    const c = this.carm, out = [], S = this.anat.sacral;
+    out.push({ ok: null, text: `Caudal epidural: through the sacral hiatus (apex at about ${this.sacralLevel(S.hiatus_apex[2])} here); the dural sac ends at ${this.sacralLevel(S.sac_end[2])}` });
+    // view: relative to the S1 pedicles (true lateral = beam along the line between them)
+    const P = this.anat.pedicles.S1;
+    const lat = new THREE.Vector3(...P.R.c).sub(new THREE.Vector3(...P.L.c)).normalize();
+    const d = this.toVolDir(this.dirFor(c.obl, c.tilt));
+    const rel = Math.asin(Math.max(-1, Math.min(1, Math.abs(d.dot(lat))))) / DEG;   // 0 = AP, 90 = lateral
+    const centred = this.carm.iso.distanceTo(this.hiatusWorld()) < 0.03;
+    if (rel >= 75) out.push({ ok: rel >= 82, text: rel >= 82 ? 'Lateral of the sacrum: hiatus and canal seen side on' : `Lateral, ${(90 - rel).toFixed(0)}° off true: rotate the C-arm a little` });
+    else if (rel <= 5) out.push({ ok: null, text: 'AP view: use it to check the needle stays in the midline' });
+    else out.push({ ok: false, text: 'Use a lateral view to find the hiatus and judge depth, AP to check the midline' });
+    out.push({ ok: centred, text: centred ? 'Centred on the sacral hiatus' : 'Centre the C-arm on the hiatus (CENTRE)' });
+    const N = this.needle;
+    if (!N || N.state !== 'skin' || N.depth < 1) {
+      out.push({ ok: null, text: 'Enter just below the hiatus at about 45°, through the sacrococcygeal ligament into the canal. To flatten the needle you must be under 15 mm deep (needle rules); otherwise start lower and flatter' });
+      return out;
+    }
+    const tw = N.tip(), t = tw.clone().applyMatrix4(this.worldToVol);
+    const lab = this.tissue.label(tw);
+    const kind = this.classify ? this.classify(tw) : '';     // same rule as the contrast
+    let where;
+    if (kind === 'intrathecal' || kind === 'subdural' || lab === 3) where = { ok: false, text: 'Tip IN THE DURAL SAC: withdraw now' };
+    else if (N.boneContact) where = { ok: false, text: 'Tip on bone: withdraw 1-2 mm before injecting' };
+    else if (kind === 'caudal') where = { ok: true, text: 'Tip in the sacral canal (epidural)' };
+    else if (lab === 15) where = { ok: false, text: 'Tip in the sacrococcygeal ligament: advance 1-2 mm' };
+    else where = { ok: false, text: 'Tip behind the sacrum (subcutaneous): it is not in the hiatus' };
+    out.push(where);
+    const b = this.belowSac(t);
+    out.push({ ok: b > 10, text: b > 0 ? `Tip ${b.toFixed(0)} mm below the end of the dural sac, at ${this.sacralLevel(t.z)} level${b <= 10 ? ': too close, withdraw' : ''}` : `Tip ${(-b).toFixed(0)} mm ABOVE the end of the dural sac: withdraw` });
+    const inCanal = this.canalMM ? this.canalMM() : 0;
+    if (inCanal > 0) out.push({ ok: inCanal <= 5 ? true : null, text: `${inCanal.toFixed(0)} mm of needle up the canal${inCanal > 5 ? ' (deeper = more vascular uptake: 20 % vs 3 % just past the ligament, Park 2018)' : ''}` });
+    out.push({ ok: Math.abs(t.x - S.midline_x) <= 5 ? null : false, text: `Tip ${Math.abs(t.x - S.midline_x).toFixed(0)} mm ${t.x - S.midline_x > 0 ? 'right' : 'left'} of the midline (on AP)` });
+    return out;
+  }
 
   // ---- needle tip report (mm, measured on the CT) ----
   tipReport() {
@@ -107,6 +176,7 @@ export class Setup {
 
   // ---- checklist for the UI: [{ok: true|false|null, text}] ----
   lines() {
+    if (this.proc === 'caudal') return this.caudalLines();
     const c = this.carm, out = [];
     const rel = this.relOblique(c.obl, c.tilt);
     const sideName = this.side === 'L' ? 'left' : 'right';

@@ -255,7 +255,7 @@ function injectContrast() {
     $('cread').className = '';
     return;
   }
-  const r = contrast.inject(needle.tip());
+  const r = contrast.inject(needle.tip(), { ml: contrastML(), needle });
   if (!r) { $('cread').textContent = 'Contrast cannot spread from here.'; return; }
   $('c-hide').classList.remove('on');
   state.lastLive = 0;
@@ -279,7 +279,7 @@ function contrastReadout() {
   const el = $('cread');
   el.className = '';
   if (!contrast || !contrast.last) { el.textContent = ''; return; }
-  if (contrast.anim) { el.textContent = `Injecting contrast under live fluoro… ${contrast.injectedML().toFixed(1)} / 1.0 mL`; return; }
+  if (contrast.anim) { el.textContent = `Injecting contrast under live fluoro… ${contrast.injectedML().toFixed(1)} / ${contrast.anim.ml.toFixed(1)} mL`; return; }
   if (!state.answer) { el.textContent = 'Contrast done. Read the pattern yourself (answer hidden).'; return; }
   const P = PATTERNS[contrast.last.kind];
   el.className = P.ok ? 'ok' : 'bad';
@@ -301,6 +301,7 @@ const setupBase = new THREE.Vector3();
 function setupCentre() {
   if (!setup) return;
   setup.centre();
+  state.level = setup.proc === 'caudal' ? 'Caudal' : `${setup.root} root`;
   setupBase.copy(carm.iso);
   changed();
 }
@@ -309,6 +310,18 @@ function setupCheck(view) { // swing to AP or lateral, keep the tilt, take a sho
   changed();
   shot();
 }
+// contrast volume: 1 mL transforaminal, 3 mL caudal epidurogram
+function contrastML() { return setup && setup.proc === 'caudal' ? 3 : 1; }
+function setProc(p) {
+  setup.proc = p;
+  document.querySelectorAll('[data-proc]').forEach((b) => b.classList.toggle('sel', b.dataset.proc === p));
+  $('tab-setup').classList.toggle('caudal', p === 'caudal');
+  $('c-inject').textContent = `Inject contrast ${contrastML()} mL`;
+  setupCentre();
+  if (p === 'caudal') { carm.obl = -90; carm.tilt = 0; changed(); }   // start in lateral for the hiatus
+  if (xr && xr.procChanged) xr.procChanged();
+}
+document.querySelectorAll('[data-proc]').forEach((b) => b.addEventListener('click', () => setProc(b.dataset.proc)));
 function setRoot(r) {
   setup.root = r;
   document.querySelectorAll('[data-root]').forEach((b) => b.classList.toggle('sel', b.dataset.root === r));
@@ -750,6 +763,8 @@ async function start() {
     needle.onChange = needleChanged;
     contrast = new Contrast(needle.tissue, meta);
     setup = new Setup(meta.anatomy, needle.tissue, carm, needle, volToWorld, worldToVol);
+    setup.canalMM = () => contrast.canalMM(needle);
+    setup.classify = (tw) => contrast.classify(tw, { boneContact: needle.boneContact });
     pen = new Pen(needle.tissue);
     pen.onChange = penMoved;
     scene.add(pen.model, pen.ink);
@@ -758,7 +773,8 @@ async function start() {
     const W = (p) => new THREE.Vector3(...p).applyMatrix4(volToWorld);
     levels = {
       'L3-4': W(mid(lm.L3, lm.L4)), 'L4-5': W(mid(lm.L4, lm.L5)), 'L5-S1': W(mid(lm.L5, lm.S1)),
-      Caudal: W(lm.sacral_hiatus), Impar: W(lm.sacrococcygeal),
+      Caudal: meta.anatomy.sacral ? W([meta.anatomy.sacral.midline_x, meta.anatomy.sacral.hiatus_centre[1], meta.anatomy.sacral.hiatus_centre[2]]) : W(lm.sacral_hiatus),
+      Impar: W(lm.sacrococcygeal),
     };
     const lv = $('levels');
     Object.keys(levels).forEach((name) => {
@@ -778,14 +794,14 @@ async function start() {
     xr = await setupXR(renderer, scene, {
       canvas: fcanvas, shot, moveCArm, panCArm, toggleLive, toggleBones, needle,
       injectContrast, toggleHideContrast, clearContrast, pen,
-      setCurved, setFlex, saveCArm, gotoSavedCArm, carm, setup, setRoot, setSide, setPlate, setTilt, setObl, setAlong, along, setupCentre, setupCheck,
+      setProc, contrastML, setCurved, setFlex, saveCArm, gotoSavedCArm, carm, setup, setRoot, setSide, setPlate, setTilt, setObl, setAlong, along, setupCentre, setupCheck,
       tray: new THREE.Vector3(0.38, TABLE_TOP + 0.03, MIDLINE_Z + 0.36),
       togglePreset: () => setPreset(state.preset === 'AP' ? 'LAT' : 'AP'),
       onXR: () => {},
     });
     savedRefresh();
     loading.classList.add('hide');
-    window.sim = { controls, soft, setView, VIEWS, setFlex, saveCArm, gotoSavedCArm, setCurved, setup, setupCentre, setupCheck, setRoot, setSide, setTilt, setObl, setAlong, xr, pen, setPenMode, skinHit, contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
+    window.sim = { setProc, controls, soft, setView, VIEWS, setFlex, saveCArm, gotoSavedCArm, setCurved, setup, setupCentre, setupCheck, setRoot, setSide, setTilt, setObl, setAlong, xr, pen, setPenMode, skinHit, contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
   } catch (e) {
     loading.textContent = `Could not start: ${e.message}`;
     console.error(e);

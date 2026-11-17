@@ -31,7 +31,7 @@ export class VRPanel {
 
   at(uv) {
     const p = this.px(uv);
-    return this.widgets.find((k) => p.x >= k.x && p.x <= k.x + k.w && p.y >= k.y - 6 && p.y <= k.y + k.h + 6) || null;
+    return this.widgets.find((k) => (!k.when || k.when()) && p.x >= k.x && p.x <= k.x + k.w && p.y >= k.y - 6 && p.y <= k.y + k.h + 6) || null;
   }
 
   drag(k, uv) { // set a slider from a point on the panel
@@ -48,6 +48,7 @@ export class VRPanel {
     g.fillStyle = '#9fe3ff'; g.font = 'bold 34px sans-serif'; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
     g.fillText(this.title, 24, 48);
     for (const k of this.widgets) {
+      if (k.when && !k.when()) continue;
       const hot = this.hover === k.id;
       if (k.type === 'button') {
         const on = k.isOn();

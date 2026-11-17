@@ -248,7 +248,9 @@ export function toImage(sums, size, opts = {}) {
     if (dx * dx + dy * dy < 0.3) vals.push(sums[y * size + x]);
   }
   vals.sort((a, b) => a - b);
-  const ref = vals[Math.floor(vals.length * 0.5)];
+  // ignore air outside the body (a lateral view near the skin, e.g. the sacral hiatus)
+  const body = vals.filter((v) => v > 60);
+  const ref = body.length > vals.length * 0.25 ? body[Math.floor(body.length * 0.5)] : vals[Math.floor(vals.length * 0.5)];
   const K = k; // display contrast (attenuation per mm water, softened by camera gamma)
   const blur = boxBlur(sums, size, size, Math.max(2, Math.round(size / 120)));
   const img = new ImageData(size, size);

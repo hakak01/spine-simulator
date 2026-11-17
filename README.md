@@ -44,11 +44,10 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
   - Big redirects need withdrawal: "Back to skin" withdraws to 6 mm, and under 15 mm the needle is free to re-aim again.
 - Advance / Withdraw: 1 mm or 5 mm per tap; hold ±1 to keep moving.
 - The needle stops on bone. You get a short vibration (Android) and a soft tick sound. iPhone browsers do not support vibration.
-- "Curved tip: ON" gives the needle a bent tip. As it advances through soft tissue it drifts toward its curve (about 0.35° per mm: ~3 mm over 30 mm). "Turn hub ⟲ / ⟳" turns the hub 45° per tap (hold to keep turning); the yellow notch on the hub and the readout show where the curve points. Withdrawing follows the same track back; turning the hub only changes the path from there on.
 - "Align to beam" lines the needle up with the C-arm beam (only when shallower than 15 mm). "Needle 3.5 in / 5 in" changes the length.
 - The needle shows on the C-arm image after a SHOT, or all the time in LIVE.
 
-**Contrast** (Needle tab): "Inject contrast 1 mL" pushes 1 mL over 3 s under live fluoro. "Hide contrast" hides it on the images, "Clear contrast" removes it, "Show answer" shows or hides the name of the pattern.
+**Contrast** (Needle tab): "Inject contrast 1 mL" pushes 1 mL over 3 s under live fluoro (caudal: 3 mL over 6 s). "Hide contrast" hides it on the images, "Clear contrast" removes it, "Show answer" shows or hides the name of the pattern.
 
 **Marker pen** (Mark tab): turn "Pen" on. Tap the skin: the pen rests there and its metal tip shows on the next C-arm image, so you can check it is over the target. "✕ Mark at pen tip" draws a cross under the tip. Drag on the skin to draw lines (two fingers still zoom and move the view). The violet ink does not show on the C-arm image. "Erase marks" clears the ink.
 
@@ -58,6 +57,11 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 3. oblique toward the injection side until the straight "down the beam" path to the target under the pedicle is clear of bone (and whether the needle is long enough),
 4. after the needle is in: "AP check" and "Lateral check" swing the C-arm (keeping the tilt), take a shot, and report the tip: mm below the pedicle and lateral/medial to its 6 o'clock line; mm in front of/behind the posterior vertebral body line and which third of the foramen.
 
+**Caudal block** (Setup tab → Block → Caudal; in VR the BLOCK button at the top of the setup panel):
+- The C-arm goes to a lateral view centred on the sacral hiatus. The checklist tells you the view (true lateral of the sacrum), whether you are centred, and, once the needle is in: where the tip is (canal, ligament, behind the sacrum, on bone, in the dural sac), how far below the end of the dural sac it is and at which sacral level, how many mm of needle are up the canal, and how far it is from the midline (check that on AP).
+- Technique: enter just below the hiatus at about 45°, go through the sacrococcygeal ligament into the canal, then inject 3 mL. The needle follows the needle rules, so you can only flatten it while it is under 15 mm deep; deeper, start again lower and flatter.
+- On this CT the hiatus apex is at about S4 and the dural sac ends at S2.
+
 **Quest 3:** press "Enter VR".
 - Left stick: rotate/tilt C-arm; hold the left trigger to move it instead. X: shot. Y: AP/LAT. A: live. B: bones.
 - Grip: hold the needle (pick it up from the tray). Touch the back with the tip to enter there.
@@ -66,9 +70,9 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 - Buttons under the C-arm screen and on the left wrist: BENT TIP on/off, BACK TO SKIN.
 - On the C-arm setup panel: SAVE C-ARM POSITION, RETURN TO SAVED, and the "Needle bend" slider (0% rigid pipe to 100% normal).
 - Let go and the needle stays in; the bend springs back to straight. Grip near the hub to take it again. To take it out: withdraw to the skin, then pull your hand back.
-- Right trigger: inject contrast. Right stick click: hide/show contrast. Left stick click: clear contrast.
+- Right trigger: inject contrast (1 mL; caudal 3 mL). Right stick click: hide/show contrast. Left stick click: clear contrast.
 - Marker pen: it lies on the tray next to the needle. Hold grip near it to pick it up. Touch the back to draw (light buzz); it slides on the skin and does not go in. Let go while it touches the skin and it stays standing there; take a shot to see its metal tip.
-- C-arm setup panel to the left of the C-arm screen (it moves with the screen): root and side buttons, sliders for tilt, oblique and position (point and hold the trigger, then move), CENTRE, AP CHECK, LAT CHECK, SHOT, endplate choice, and the same live checklist.
+- C-arm setup panel to the left of the C-arm screen (it moves with the screen): BLOCK button (transforaminal / caudal), root and side buttons, sliders for tilt, oblique and position (point and hold the trigger, then move), CENTRE, AP CHECK, LAT CHECK, SHOT, endplate choice, and the same live checklist.
 - EXIT VR and ERASE INK buttons are under the C-arm screen and on your left wrist. Point with the controller and pull the trigger; for EXIT VR press twice (the first press shows "PRESS AGAIN").
 - Point at the screen and hold grip to move the screen.
 
@@ -104,11 +108,18 @@ The tip position decides the pattern, using the tissue map:
 | dural sac, deeper | intrathecal: myelogram, pools anteriorly (dependent when prone) |
 | disc | intradiscal: nucleogram |
 | muscle / soft tissue | soft tissue: patchy streaks |
+| caudal: sacral canal | caudal epidural: fills the canal, climbs toward L5-S1 and runs out along the sacral roots through the foramina ("Christmas tree" on AP) |
+| caudal: sacral canal, random vascular uptake (3 % just past the ligament, rising to 20 % when 10 mm or more of needle is up the canal) | vascular: streaks along the sacral epidural veins, gone in < 1 s |
+| caudal: behind the sacrum or in the ligament | subcutaneous: an irregular cloud behind the sacrum, no canal outline |
+| caudal: tip pressed on bone | intraosseous: marrow blush in the sacrum |
 
 Contrast spreads through the matching space over time (a shortest-path flood through the tissue map, 1 mL), is smoothed, and is drawn into the C-arm image like the CT.
 For comparison, a prospective study found intravascular spread in 8.1 % of lumbar and 21.3 % of S1 transforaminal injections (Furman MB et al. *Spine* 2000;25:2628-32, doi:10.1097/00007632-200010150-00014). The trainer uses higher rates on purpose.
+For caudal blocks, intravascular spread was 20.3 % when the needle was advanced into the canal and 3.2 % when it stayed just past the sacrococcygeal ligament (Park SJ et al. *J Pain Res* 2018;11:2961-7, doi:10.2147/JPR.S182227); a smaller study found 24 % with the needle 1 cm into the canal vs 0 % (Doo AR et al. *Korean J Pain* 2015;28:122-8, doi:10.3344/kjp.2015.28.2.122). Without fluoroscopy, a caudal needle was in the right place only 74 % of the time (Stitz MY, Sommer HM. *Spine* 1999;24:1371-6, doi:10.1097/00007632-199907010-00016).
 
 The CT does not show nerve roots, so `tools/spine_anatomy.py` builds them: discs (between vertebral bodies), epidural space (4.5 mm ring round the dural sac), foramina (below each pedicle) and the exiting L3, L4 and L5 roots (round the lower border of the pedicle, through the upper foramen, then down and out toward the psoas).
+
+`tools/sacral.py` builds the sacrum for the caudal block from this CT: the sacral canal (the low-density gap between the vertebral bodies and the dorsal plate, followed down the midline), the hiatus (where the dorsal plate stops), the sacrococcygeal ligament (a thin layer over the hiatus), the dorsal sacral foramina S1-S4 on both sides, and modelled S1-S4 roots and epidural veins (from the canal out through each foramen).
 
 ## How the setup coach measures
 
@@ -117,6 +128,12 @@ The CT does not show nerve roots, so `tools/spine_anatomy.py` builds them: discs
 - True AP: the beam is perpendicular to the line joining the two pedicles of the target vertebra (within 2°).
 - Target ("safe triangle", subpedicular): an open spot in the foramen 1.5-7.5 mm under the pedicle and 0-7 mm behind the posterior vertebral body line that a straight down-the-beam needle can reach with the endplate squared at a 15-35° oblique. On this CT it lies 3-6 mm lateral to the AP 6 o'clock line.
 - Path check: the straight line from the target back along the beam to the skin must not pass through bone.
+
+Caudal block:
+- Lateral: the beam runs along the line between the two S1 pedicles (within 8°). Centred: the C-arm centre is within 30 mm of the hiatus.
+- Tip place: the same rule as the contrast (canal, ligament, behind the sacrum, on bone, dural sac).
+- Distance to the dural sac: measured along the sacral canal from the end of the sac (S2 on this CT); more than 10 mm is marked as safe.
+- Needle up the canal: the length of the needle track inside the canal; more than 5 mm raises the vascular chance (see How contrast works).
 
 ## Soft tissues in the 3D views
 
@@ -127,8 +144,9 @@ The CT does not show nerve roots, so `tools/spine_anatomy.py` builds them: discs
 | Thoracolumbar fascia | built from the CT as the sheath closed around both erector spinae muscles |
 | Nerve roots L3-L5 with dorsal root ganglion | modelled (CT cannot show them): round the lower border of the pedicle, through the upper foramen |
 | L3 and L4 lumbar segmental arteries | modelled: from the aorta round the waist of the vertebral body to the foramen, where the spinal (radicular) branch joins the root |
+| Sacral roots S1-S4, sacral epidural veins, sacrococcygeal ligament | modelled from the sacral canal, foramina and hiatus found on the CT (`tools/sacral.py`) |
 
-Not in the model: ligaments (ligamentum flavum, interspinous), S1 and sacral roots, small veins, fat as a separate layer. The soft tissues are for viewing; the needle still uses the tissue map only for bone and contrast.
+Not in the model: ligamentum flavum, interspinous ligament, small veins outside the sacrum, fat as a separate layer. The soft tissues are for viewing; the needle still uses the tissue map only for bone and contrast.
 
 ## Data and credits
 
@@ -143,4 +161,4 @@ This is a training aid with one patient's anatomy. It is not a medical device an
 
 - `index.html`, `src/` – the app (no build step)
 - `data/` – prepared CT, tissue labels and meshes
-- `tools/prepare_ct.py` – rebuilds `data/` from the source dataset
+- `tools/prepare_ct.py` – rebuilds `data/` from the source dataset (with `tools/spine_anatomy.py`, `tools/soft_tissue.py` and `tools/sacral.py`)

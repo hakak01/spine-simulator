@@ -63,7 +63,7 @@ export async function setupXR(renderer, scene, ctx) {
     'GRIP: hold the needle. Move your hand to aim, push in or pull out',
     'or RIGHT stick up/down: advance / withdraw.  Left/right: turn the hub',
     'Deep (over 15 mm) the hand only leans the hub: withdraw to redirect',
-    'RIGHT TRIGGER: inject contrast (1 mL, live fluoro)',
+    'RIGHT TRIGGER: inject contrast (1 mL; caudal 3 mL), live fluoro',
     'Right stick click: hide / show contrast   Left stick click: clear it',
     'PEN on the tray: grip near it, touch the skin to draw (metal tip shows)',
     'Screen: point + hold GRIP to move it. Buttons + setup sliders: point + TRIGGER',
@@ -113,11 +113,15 @@ export async function setupXR(renderer, scene, ctx) {
 
   // ----- C-arm setup panel (left of the screen; moves with it) -----
   const panel = new VRPanel(768, 1400, 0.4);
-  panel.title = 'C-ARM SETUP  (transforaminal)';
+  panel.title = 'C-ARM SETUP';
+  panel.button('proc', 400, 8, 344, 52, '', () => ctx.setProc(ctx.setup.proc === 'caudal' ? 'tfesi' : 'caudal'));
+  const procBtn = panel.widgets.find((k) => k.id === 'proc');
+  const tfOnly = () => ctx.setup.proc !== 'caudal';
   const fmtDeg = (pos, neg) => (v) => (Math.abs(v) < 0.25 ? '0°' : `${Math.abs(v).toFixed(1)}° ${v > 0 ? pos : neg}`);
   ['L3', 'L4', 'L5'].forEach((r, i) => panel.button(`root${r}`, 24 + i * 112, 72, 100, 62, `${r} root`, () => ctx.setRoot(r), () => ctx.setup.root === r));
   panel.button('sideL', 400, 72, 160, 62, 'LEFT', () => ctx.setSide('L'), () => ctx.setup.side === 'L');
   panel.button('sideR', 580, 72, 160, 62, 'RIGHT', () => ctx.setSide('R'), () => ctx.setup.side === 'R');
+  for (const k of panel.widgets) if (/^(root|side)/.test(k.id)) k.when = tfOnly;
   panel.slider('tilt', 50, 200, 668, 50, 'Tilt', -45, 45, () => ctx.carm.tilt, (v) => ctx.setTilt(Math.round(v * 2) / 2), fmtDeg('cranial', 'caudal'));
   panel.slider('obl', 50, 310, 668, 50, 'Oblique', -95, 95, () => ctx.carm.obl, (v) => ctx.setObl(Math.round(v * 2) / 2), fmtDeg('left', 'right'));
   panel.slider('pos', 50, 420, 668, 50, 'Along the spine', -100, 100, () => ctx.along(), (v) => ctx.setAlong(Math.round(v)),
@@ -128,6 +132,7 @@ export async function setupXR(renderer, scene, ctx) {
   panel.button('shot', 576, 500, 168, 70, 'SHOT', () => ctx.shot());
   panel.button('plate', 24, 584, 720, 56, '', () => ctx.setPlate(ctx.setup.plate === 'upper' ? 'lower' : 'upper'));
   const plateBtn = panel.widgets.find((k) => k.id === 'plate');
+  plateBtn.when = tfOnly;
   let savedTxt = '';
   panel.button('savepos', 24, 654, 352, 62, 'SAVE C-ARM POSITION', () => ctx.saveCArm());
   panel.button('gotopos', 392, 654, 352, 62, 'RETURN TO SAVED', () => { if (!ctx.gotoSavedCArm()) say('No C-arm position saved yet. Press SAVE C-ARM POSITION first.', 3); });
@@ -137,6 +142,7 @@ export async function setupXR(renderer, scene, ctx) {
   panel.textTop = 890;
   const redrawPanel = () => {
     gotoBtn.label = savedTxt ? `RETURN: ${savedTxt}` : 'RETURN TO SAVED';
+    procBtn.label = ctx.setup.proc === 'caudal' ? 'BLOCK: CAUDAL' : 'BLOCK: TRANSFORAMINAL';
     plateBtn.label = ctx.setup.plate === 'upper' ? 'SQUARE: lower endplate of upper vertebra' : 'SQUARE: upper endplate of lower vertebra';
     panel.draw();
   };
@@ -416,5 +422,6 @@ export async function setupXR(renderer, scene, ctx) {
   const setupChanged = (lines) => { panel.lines = lines; redrawPanel(); };
   const curvedChanged = () => { bars.forEach((b) => { b.labels.curve = needle.curved ? 'BENT TIP: ON' : null; b.draw(); }); };
   const savedChanged = (t) => { savedTxt = t; redrawPanel(); };
-  return { update, buzz, say, setupChanged, curvedChanged, savedChanged, onImage: () => { tex.needsUpdate = true; }, monitor, monBar, wristBar, panel };
+  const procChanged = () => redrawPanel();
+  return { update, buzz, say, setupChanged, curvedChanged, savedChanged, procChanged, onImage: () => { tex.needsUpdate = true; }, monitor, monBar, wristBar, panel };
 }

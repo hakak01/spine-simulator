@@ -100,7 +100,7 @@ def lumbar_arteries(art, lab, verts, anatomy, sac, sp):
 
 def build(load, sl, body, lab, hu, verts, anatomy, sp, mesh, save):
     """Write the mesh files; returns the info block for ct.json."""
-    info = {"files": {}, "modelled": ["nerve roots", "lumbar segmental arteries"]}
+    info = {"files": {}, "modelled": ["nerve roots", "lumbar segmental arteries", "sacral roots", "sacral veins", "sacrococcygeal ligament"]}
 
     def emit(name, mask, tris, sigma=0.8, level=0.5):
         if mask.sum() < 50:
@@ -120,5 +120,6 @@ def build(load, sl, body, lab, hu, verts, anatomy, sp, mesh, save):
     emit("psoas", union(load, MUSCLES["psoas"], sl, body), 20000, 1.0)
     emit("gluteal", union(load, MUSCLES["gluteal"], sl, body), 22000, 1.2)
     emit("fascia", fascia_mask(erector) & body, 16000, 1.2)
+    emit("ligament", lab == 15, 3000, 0.7)
     info["lumbar_arteries"] = lumbar_arteries(art, lab, verts, anatomy, sac, sp)
     return info

@@ -4,7 +4,7 @@
 // grid that the C-arm renderer adds to the CT.
 import * as THREE from 'three';
 
-const DISC = 10, EPI = 11, ROOT = 12, FOR = 13, SAC = 3, BONE = 2;
+const DISC = 10, EPI = 11, ROOT = 12, FOR = 13, SAC = 3, BONE = 2, CANAL = 14, LIG = 15;
 
 export const PATTERNS = {
   epidural: { name: 'Epidural / perineural', ok: true,
@@ -19,10 +19,17 @@ export const PATTERNS = {
     text: 'Contrast stays inside the disc space (nucleogram). The tip is too anterior / in the annulus.' },
   softtissue: { name: 'Soft tissue / muscle', ok: false,
     text: 'Irregular, feathery blob that does not follow the root or the epidural space. The tip is not in the foramen.' },
+  caudal: { name: 'Sacral epidural (caudal)', ok: true,
+    text: 'Contrast fills the sacral canal, climbs toward L5-S1 and runs out along the sacral roots through the foramina. Correct pattern.' },
+  subcutaneous: { name: 'Subcutaneous / dorsal to the sacrum', ok: false,
+    text: 'Contrast pools behind the sacrum, under the skin and the sacrococcygeal ligament, and does not enter the canal. The needle is not through the hiatus.' },
+  intraosseous: { name: 'Intraosseous', ok: false,
+    text: 'A dense blush in the sacral bone marrow. The tip was pressed into the sacrum: withdraw 1-2 mm off the bone before injecting.' },
 };
 
-const VOL_ML = 1.0;          // contrast volume per injection
-const INJ_SEC = 3.0;         // injection time
+const VOL_ML = 1.0;          // default contrast volume per injection (transforaminal)
+const INJ_SEC = 3.0;         // default injection time
+const ML_PER_SEC = 0.5;      // larger volumes (caudal) are pushed at this rate
 const VOX_UL = 1.5 * 1.5 * 1.5; // µL per voxel
 const BOX = [72, 64, 112];   // contrast grid, voxels (108 x 96 x 168 mm)
 
@@ -78,7 +85,25 @@ export class Contrast {
       }
     }
     this.s1z = (this.anat.pedicles.S1.L.c[2] + this.anat.pedicles.S1.R.c[2]) / 2 / this.sp[2];
+    // sacrum: below the S1 foramina + 10 mm is "sacral" (caudal block rules apply)
+    const S = this.anat.sacral;
+    this.sacTopZ = S ? (S.level_z.S1 + 10) / this.sp[2] : -1;
+    this.sacVeins = S ? S.veins.map((l) => l.map((p) => p.map((v, i) => v / this.sp[i]))) : [];
+    this.ml = VOL_ML; this.injSec = INJ_SEC;
     this.v = new THREE.Vector3();
+  }
+
+  inSacrum(z) { return z < this.sacTopZ; }
+
+  // mm of the needle track lying in the sacral canal (how far it was advanced up the canal)
+  canalMM(needle) {
+    if (!needle || !needle.path) return 0;
+    let n = 0;
+    for (let i = 0; i < needle.path.length; i += 2) {
+      const [x, y, z] = this.vox(needle.path[i]).map(Math.round);
+      if (this.lab(x, y, z) === CANAL) n++;
+    }
+    return n * 0.5;
   }
 
   // CT voxel coordinates (float) of a world point
@@ -94,10 +119,20 @@ export class Contrast {
   }
 
   // Which pattern would an injection at this tip give? (before the random vascular roll)
-  classify(tipWorld) {
+  classify(tipWorld, opts = {}) {
     const [fx, fy, fz] = this.vox(tipWorld);
     const x = Math.round(fx), y = Math.round(fy), z = Math.round(fz);
     const L = this.lab(x, y, z);
+    if (this.inSacrum(z)) {           // caudal region
+      if (L === SAC) return this.onSacEdge(x, y, z) ? 'subdural' : 'intrathecal';
+      if (opts.boneContact) return 'intraosseous';
+      if (L === CANAL || L === FOR || L === ROOT || L === EPI) return 'caudal';
+      for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (this.lab(x + dx, y + dy, z + dz) === CANAL) return 'caudal';
+      }
+      if (L === 4 || L === 5) return 'vascular';
+      return 'subcutaneous';
+    }
     if (L === DISC) return 'intradiscal';
     if (L === SAC) return this.onSacEdge(x, y, z) ? 'subdural' : 'intrathecal';
     if (L === 4 || L === 5) return 'vascular';
@@ -117,24 +152,29 @@ export class Contrast {
 
   // The pattern actually produced, including the random vascular uptake
   // (about 20 % at lumbar levels, 40 % at S1). Same tip position = same answer.
-  decide(tipWorld) {
-    const kind = this.classify(tipWorld);
-    if (kind !== 'epidural') return { kind, randomVascular: false };
+  decide(tipWorld, opts = {}) {
+    const kind = this.classify(tipWorld, opts);
+    if (kind !== 'epidural' && kind !== 'caudal') return { kind, randomVascular: false };
     const v = this.vox(tipWorld);
     if (!this.roll || Math.hypot(v[0] - this.roll.v[0], v[1] - this.roll.v[1], v[2] - this.roll.v[2]) > 1.0) {
-      const chance = v[2] < this.s1z ? 0.4 : 0.2;
+      // transforaminal: 20 % lumbar, 40 % S1 (user setting). Caudal: rises with how far the needle was
+      // advanced up the canal: ~3 % just past the ligament, ~20 % at 1 cm (Park 2018, Doo 2015)
+      const chance = kind === 'caudal'
+        ? 0.03 + 0.17 * Math.max(0, Math.min(1, (this.canalMM(opts.needle) - 2) / 8))
+        : v[2] < this.s1z ? 0.4 : 0.2;
       this.roll = { v, vascular: Math.random() < chance, chance };
     }
     return this.roll.vascular ? { kind: 'vascular', randomVascular: true } : { kind, randomVascular: false };
   }
 
   // ---------- grid ----------
-  placeGrid(c) {
+  placeGrid(c, up = 0.5) { // up: share of the grid above the tip (caudal contrast climbs)
     const o = this.origin, B = this.dims, m = 14;
     const inside = c.every((v, i) => v - o[i] >= m && v - o[i] < B[i] - m);
-    if (inside && this.any) return;
+    if (inside && this.any && Math.abs(up - (this.lastUp || 0.5)) < 0.01) return;
+    this.lastUp = up;
     const lim = [this.t.nx, this.t.ny, this.t.nz];
-    this.origin = c.map((v, i) => Math.max(0, Math.min(lim[i] - B[i], Math.round(v - B[i] / 2))));
+    this.origin = c.map((v, i) => Math.max(0, Math.min(lim[i] - B[i], Math.round(v - B[i] * (i === 2 ? 1 - up : 0.5)))));
     this.base.fill(0);
     if (this.any) this.data.fill(0);
   }
@@ -154,7 +194,7 @@ export class Contrast {
   // Dijkstra from the start voxel through the allowed space; returns voxels in order of arrival.
   spread(start, allowed, cost, maxCount) {
     const B = this.dims, sx = 1, sy = B[0], sz = B[0] * B[1];
-    const dist = new Float32Array(this.n).fill(Infinity);
+    const dist = new Float64Array(this.n).fill(Infinity);   // 64-bit: the heap keeps 64-bit costs (32-bit rounding skipped voxels)
     const order = [];
     const h = new Heap();
     dist[start] = 0; h.push(0, start);
@@ -181,7 +221,7 @@ export class Contrast {
   }
 
   nearestAllowed(c, allowed) {
-    for (let r = 0; r <= 3; r++) {
+    for (let r = 0; r <= 5; r++) {
       let best = -1, bd = 1e9;
       for (let dz = -r; dz <= r; dz++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
         const g = this.gi(c[0] + dx, c[1] + dy, c[2] + dz);
@@ -214,7 +254,7 @@ export class Contrast {
     }
     const jit = new Float32Array(this.n);
     for (let g = 0; g < this.n; g++) jit[g] = 0.75 + Math.random() * 0.5;
-    const ml = VOL_ML * 1000;
+    const ml = this.ml * 1000;
     let allowed, cost, dens, count, extra = 1, skip = null;
     if (kind === 'epidural') {
       const near = this.nearRootMask(lab);
@@ -229,7 +269,7 @@ export class Contrast {
     } else if (kind === 'intrathecal') {
       allowed = (g) => lab[g] === SAC;
       cost = (g, dx, dy, dz) => (dy > 0 ? 0.45 : dy < 0 ? 1.6 : dz ? 0.7 : 1.0) * jit[g]; // +y = anterior = down when prone
-      dens = 0.4; count = ml / (VOX_UL * dens); extra = 2.5;            // mixes with CSF, keeps spreading
+      dens = 0.3; count = ml / (VOX_UL * dens); extra = 2.5;            // mixes with CSF, keeps spreading
     } else if (kind === 'subdural') {
       const ax = this.anat.sac_axis, side = Math.sign(c[0] - ax.x_mm[Math.round(c[2] * this.sp[2] / 6)] / this.sp[0]) || 1;
       allowed = (g) => {
@@ -240,7 +280,7 @@ export class Contrast {
         return this.onSacEdge(gx, gy, gz);
       };
       cost = (g, dx, dy, dz) => (dz ? 0.35 : 3.0) * jit[g];            // stays on one side, runs up and down
-      dens = 0.9; count = ml / (VOX_UL * dens) * 1.3; extra = 1.25;
+      dens = 0.55; count = ml / (VOX_UL * 0.9); extra = 1.25;           // thin layer
     } else if (kind === 'intradiscal') {
       allowed = (g) => lab[g] === DISC;
       cost = (g) => {
@@ -249,23 +289,68 @@ export class Contrast {
         return (e ? 3.0 : 0.8) * jit[g];                               // pools in the centre (nucleus)
       };
       dens = 0.6; count = ml / (VOX_UL * dens);
-    } else { // soft tissue
-      // smooth random field: contrast runs in low-resistance streaks along the muscle fibres
-      const ph = Array.from({ length: 9 }, () => Math.random() * 6.283);
+    } else if (kind === 'caudal') {
+      // sacral canal: climbs toward L5-S1, runs out along the sacral roots through the foramina
+      const near = this.nearRootMask(lab);
+      allowed = (g) => lab[g] === CANAL || lab[g] === FOR || lab[g] === ROOT || lab[g] === EPI;
+      cost = (g, dx, dy, dz) => {
+        if (lab[g] === ROOT) return 2.5;
+        if (lab[g] === CANAL || lab[g] === EPI) return (dz > 0 ? 0.45 : dz < 0 ? 0.8 : 1.2) * jit[g];
+        return (near[g] ? 0.5 : 1.8) * jit[g];
+      };
+      skip = (g) => lab[g] === ROOT;
+      dens = 0.5; count = ml / (VOX_UL * dens);
+    } else if (kind === 'intraosseous') {
+      // marrow blush in the sacrum around the tip
+      allowed = (g) => lab[g] === BONE;
+      cost = (g) => (0.3 + Math.random() * 1.6);
+      dens = 0.32; count = Math.min(ml, 1000) / (VOX_UL * dens);
+    } else { // soft tissue (subcutaneous: also the ligament)
+      // smooth random field, nearly constant head-to-foot: contrast runs in streaks along the
+      // muscle fibres and fascial planes, not as a round blob
+      const ph = Array.from({ length: 6 }, () => Math.random() * 6.283);
       const field = (g) => {
         const x = g % B[0], y = Math.floor(g / B[0]) % B[1], z = Math.floor(g / (B[0] * B[1]));
-        return (Math.sin(x * 0.9 + ph[0]) * Math.sin(y * 0.8 + ph[1]) + Math.sin(x * 0.45 + y * 0.5 + ph[2])
-          + 0.6 * Math.sin(z * 0.25 + x * 0.6 + ph[3]) + 0.5 * Math.sin(y * 1.3 + z * 0.2 + ph[4])) / 3.1;
+        return 0.55 * Math.sin(x * 1.15 + ph[0]) * Math.cos(y * 0.95 + ph[1])
+          + 0.35 * Math.sin(x * 0.55 + y * 0.6 + ph[2]) + 0.2 * Math.sin(z * 0.12 + ph[3]);
       };
-      allowed = (g) => lab[g] === 1 || lab[g] === 7;
-      cost = (g, dx, dy, dz) => (dz ? 0.45 : 1.0) * Math.exp(2.2 * field(g)) * jit[g];
-      dens = 0.36; count = ml / (VOX_UL * dens);
+      if (kind === 'subcutaneous') {
+        // over the sacrum: a thin, cloudy sheet under the skin that spreads sideways as much as
+        // up and down, with no canal outline and no foramina
+        const blot = (g) => { const x = g % B[0], z = Math.floor(g / (B[0] * B[1]));
+          return 0.6 * Math.sin(x * 0.45 + ph[4]) * Math.cos(z * 0.4 + ph[5]) + 0.4 * Math.sin(x * 0.3 + z * 0.35 + ph[2]); };
+        allowed = (g) => (lab[g] === 1 || lab[g] === 7 || lab[g] === LIG) && blot(g) < 0.45;
+        cost = (g, dx, dy, dz) => (dy ? 1.6 : 0.8) * (1.3 + blot(g)) * jit[g];
+        dens = 0.28; count = ml / (VOX_UL * dens);
+      } else {
+        allowed = (g) => (lab[g] === 1 || lab[g] === 7 || lab[g] === LIG) && field(g) < -0.05;
+        cost = (g, dx, dy, dz) => (dz ? 0.35 : 1.0) * (1.2 + field(g)) * jit[g];
+        dens = 0.32; count = ml / (VOX_UL * dens);
+      }
     }
     const start = this.nearestAllowed(c, allowed);
     if (start < 0) return null;
     let order = this.spread(start, allowed, cost, Math.ceil(count * extra * (skip ? 1.5 : 1)));
     if (skip) order = order.filter((g) => !skip(g)).slice(0, Math.ceil(count * extra));
-    return { kind, order, dens, count: Math.min(count, order.length / extra), extra, bbox: this.bbox(order), dur: INJ_SEC * (kind === 'intrathecal' ? 2.0 : kind === 'subdural' ? 1.5 : 1.15) };
+    const inj = this.injSec;
+    return { kind, order, dens, count: Math.min(count, order.length / extra), extra, bbox: this.bbox(order), inj, ml: this.ml, dur: inj * (kind === 'intrathecal' ? 2.0 : kind === 'subdural' ? 1.5 : 1.15) };
+  }
+
+  // caudal: sacral epidural veins: from the tip into the nearest vein, along it, and out with a root vein
+  sacralVeinPath(c) {
+    let best = null, bd = 1e9;
+    this.sacVeins.forEach((l, li) => l.forEach((p, i) => {
+      const d = Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]);
+      if (d < bd) { bd = d; best = { li, i }; }
+    }));
+    const line = this.sacVeins[best.li];
+    const up = [c.slice(), ...line.slice(best.i)];          // toward the head
+    const lines = [up, line.slice(0, best.i + 1).reverse()];
+    // root veins at the foramina near the tip
+    this.sacVeins.forEach((l) => {
+      if (l.length <= 3 && Math.abs(l[0][2] - c[2]) < 25) lines.push(l);
+    });
+    return lines;
   }
 
   // radicular artery (to the anterior spinal artery, with its hairpin) or epidural veins
@@ -358,14 +443,18 @@ export class Contrast {
   }
 
   // ---------- injection ----------
-  inject(tipWorld) {
+  // opts: {ml, needle}. ml: contrast volume (default 1 mL); needle: for bone contact and canal depth
+  inject(tipWorld, opts = {}) {
     if (this.anim) return null;
     const c = this.vox(tipWorld).map(Math.round);
-    const { kind, randomVascular } = this.decide(tipWorld);
-    this.placeGrid(c);
+    const { kind, randomVascular } = this.decide(tipWorld, { needle: opts.needle, boneContact: opts.needle && opts.needle.boneContact });
+    this.ml = opts.ml || VOL_ML;
+    this.injSec = Math.max(INJ_SEC, this.ml / ML_PER_SEC);
+    const sacral = this.inSacrum(c[2]);
+    this.placeGrid(c, sacral && (kind === 'caudal' || kind === 'vascular') ? 0.78 : 0.5);   // caudal contrast climbs
     if (kind === 'vascular') {
-      const vox = this.rasterVessels(this.vesselPath(c));
-      this.anim = { kind, vox, bbox: this.bbox(vox.map((q) => q.g)), t: 0, dur: INJ_SEC, randomVascular };
+      const vox = this.rasterVessels(sacral && this.sacVeins.length ? this.sacralVeinPath(c) : this.vesselPath(c));
+      this.anim = { kind, vox, bbox: this.bbox(vox.map((q) => q.g)), t: 0, dur: this.injSec, inj: this.injSec, ml: this.ml, randomVascular };
     } else {
       const p = this.plan(kind, c);
       if (!p) return null;
@@ -387,7 +476,9 @@ export class Contrast {
     if (A.kind === 'vascular') {
       // two pushes of contrast; each streaks along the vessel and washes out in < 1 s
       const best = new Map();
-      for (const [t0, amp] of [[0, 1], [1.4, 0.65]]) {
+      const pushes = [];
+      for (let t0 = 0, amp = 1; t0 < A.inj - 0.5; t0 += 1.4, amp *= 0.75) pushes.push([t0, amp]);
+      for (const [t0, amp] of pushes) {
         const tp = A.t - t0;
         if (tp < 0) continue;
         const env = amp * (tp < 0.3 ? 1 : Math.max(0, 1 - (tp - 0.3) / 0.5));
@@ -397,8 +488,8 @@ export class Contrast {
       }
       for (const [g, v] of best) list.push([g, Math.min(1, v * 1.8)]); // thin vessel: strong before the blur
     } else {
-      const inj = Math.min(1, A.t / INJ_SEC);
-      const post = Math.max(0, Math.min(1, (A.t - INJ_SEC) / Math.max(0.01, A.dur - INJ_SEC)));
+      const inj = Math.min(1, A.t / A.inj);
+      const post = Math.max(0, Math.min(1, (A.t - A.inj) / Math.max(0.01, A.dur - A.inj)));
       const n = Math.min(A.order.length, A.count * (inj + (A.extra - 1) * post));
       const soft = Math.max(8, n * 0.15);
       // diluted agents (intrathecal) get fainter as they spread
@@ -420,7 +511,7 @@ export class Contrast {
   }
 
   injectedML() {
-    return this.anim ? Math.min(VOL_ML, (this.anim.t / INJ_SEC) * VOL_ML) : 0;
+    return this.anim ? Math.min(this.anim.ml, (this.anim.t / this.anim.inj) * this.anim.ml) : 0;
   }
 
   clear() {
