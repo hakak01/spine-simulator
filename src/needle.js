@@ -33,7 +33,9 @@ export class Tissue {
     return this.labels[x + y * this.nx + z * this.nx * this.ny];
   }
 
-  inBone(pw) { return this.hu(pw) > 180 && this.label(pw) === 2; }
+  // bone stops the needle: dense bone (label 2 over 180 HU), and the thin, low-density coccyx and lowest
+  // sacrum (label 18) everywhere except at its joints (label 16)
+  inBone(pw) { const l = this.label(pw); return l === 18 || (l === 2 && this.hu(pw) > 180); }
   inBody(pw) { return this.hu(pw) > -500; }
 }
 

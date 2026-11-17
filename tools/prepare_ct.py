@@ -38,12 +38,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import spine_anatomy  # noqa: E402
 import soft_tissue  # noqa: E402
 import sacral  # noqa: E402
+import impar  # noqa: E402
 
 URL = "https://zenodo.org/records/10047263/files/Totalsegmentator_dataset_small_v201.zip?download=1"
 CASE = "s0461"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "data")
 WORK = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, ".ctwork")
+# Coccygeal joint levels (voxel z, cropped volume, at the coccyx centre line) for this case, picked on
+# sagittal and coronal slices: the sacrococcygeal joint lies between the S5 body (with the end of the
+# sacral canal behind it) and the wide first coccygeal body with its transverse processes; the first
+# intercoccygeal joint is the next clear gap down. tools/impar.py refines height and tilt.
+JOINT_Z = {"scj": 57, "cj1": 48}
 
 VESSELS_AND_KIDNEYS = {
     "aorta": 40, "inferior_vena_cava": 40, "iliac_artery_left": 40, "iliac_artery_right": 40,
@@ -144,11 +150,6 @@ def main():
     dims = hu.shape
     print("crop dims", dims, "spacing", sp)
 
-    u8 = np.clip(np.round((hu + 1000.0) / 10.0), 0, 255).astype(np.uint8)
-    with gzip.GzipFile(os.path.join(OUT, "ct_u8.bin.gz"), "wb", compresslevel=9, mtime=0) as f:
-        f.write(np.ascontiguousarray(u8.transpose(2, 1, 0)).tobytes())  # x fastest
-    print(f"  ct_u8.bin.gz: {os.path.getsize(os.path.join(OUT, 'ct_u8.bin.gz'))/1e6:.1f} MB")
-
     # 4. meshes
     skin_field = ndimage.gaussian_filter(body.astype(np.float32), 1.0)
     v, f = mesh(skin_field[::2, ::2, ::2], 0.5, sp * 2, 40000)
@@ -180,6 +181,16 @@ def main():
     # sacral canal, hiatus, ligament, sacral foramina and roots (see tools/sacral.py)
     anatomy["sacral"] = sacral.build(lab, hu, (load("sacrum") | load("vertebrae_S1"))[sl] & body,
                                      load("spinal_cord")[sl] & body, verts, sp, anatomy)
+    # coccygeal joints, retrorectal space, ganglion impar, sympathetic trunks (see tools/impar.py)
+    anatomy["impar"] = impar.build(lab, hu, load("sacrum")[sl] & body, sp, anatomy, JOINT_Z)
+    # The coccyx is only a few mm thick, so at 1.5 mm voxels its HU is underestimated (partial volume)
+    # and it almost vanishes on the lateral C-arm image. Raise its bone (not the joints) by 250 HU.
+    hu[(lab == impar.HARD) & (hu > 0)] += 250.0
+
+    u8 = np.clip(np.round((hu + 1000.0) / 10.0), 0, 255).astype(np.uint8)
+    with gzip.GzipFile(os.path.join(OUT, "ct_u8.bin.gz"), "wb", compresslevel=9, mtime=0) as f:
+        f.write(np.ascontiguousarray(u8.transpose(2, 1, 0)).tobytes())  # x fastest
+    print(f"  ct_u8.bin.gz: {os.path.getsize(os.path.join(OUT, 'ct_u8.bin.gz'))/1e6:.1f} MB")
     with gzip.GzipFile(os.path.join(OUT, "labels_u8.bin.gz"), "wb", compresslevel=9, mtime=0) as f:
         f.write(np.ascontiguousarray(lab.transpose(2, 1, 0)).tobytes())
     print(f"  labels_u8.bin.gz: {os.path.getsize(os.path.join(OUT, 'labels_u8.bin.gz'))/1e6:.2f} MB")
@@ -209,7 +220,8 @@ def main():
         "labels": {"0": "air", "1": "soft tissue", "2": "bone", "3": "spinal canal", "4": "artery",
                    "5": "vein", "6": "bowel", "7": "muscle", "8": "kidney", "9": "bladder/prostate",
                    "10": "disc", "11": "epidural space", "12": "nerve root", "13": "foramen / periradicular fat",
-                   "14": "sacral canal (epidural)", "15": "sacrococcygeal ligament"},
+                   "14": "sacral canal (epidural)", "15": "sacrococcygeal ligament",
+                   "16": "coccygeal joint", "17": "retrorectal (presacral) space", "18": "coccyx bone"},
         "landmarks": lm,
         "anatomy": anatomy,
         "soft": soft,

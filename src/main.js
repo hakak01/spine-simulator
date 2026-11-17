@@ -301,7 +301,7 @@ const setupBase = new THREE.Vector3();
 function setupCentre() {
   if (!setup) return;
   setup.centre();
-  state.level = setup.proc === 'caudal' ? 'Caudal' : `${setup.root} root`;
+  state.level = setup.proc === 'caudal' ? 'Caudal' : setup.proc === 'impar' ? `Impar (${setup.route === 'scj' ? 'S-Co joint' : 'Co1-Co2'})` : `${setup.root} root`;
   setupBase.copy(carm.iso);
   changed();
 }
@@ -310,18 +310,28 @@ function setupCheck(view) { // swing to AP or lateral, keep the tilt, take a sho
   changed();
   shot();
 }
-// contrast volume: 1 mL transforaminal, 3 mL caudal epidurogram
-function contrastML() { return setup && setup.proc === 'caudal' ? 3 : 1; }
+// contrast volume: 1 mL transforaminal, 3 mL caudal epidurogram, 2 mL ganglion impar
+function contrastML() { return !setup ? 1 : setup.proc === 'caudal' ? 3 : setup.proc === 'impar' ? 2 : 1; }
 function setProc(p) {
   setup.proc = p;
+  contrast.proc = p;
   document.querySelectorAll('[data-proc]').forEach((b) => b.classList.toggle('sel', b.dataset.proc === p));
   $('tab-setup').classList.toggle('caudal', p === 'caudal');
+  $('tab-setup').classList.toggle('impar', p === 'impar');
   $('c-inject').textContent = `Inject contrast ${contrastML()} mL`;
   setupCentre();
-  if (p === 'caudal') { carm.obl = -90; carm.tilt = 0; changed(); }   // start in lateral for the hiatus
+  if (p !== 'tfesi') { carm.obl = -90; carm.tilt = 0; changed(); }   // start in lateral for the hiatus / coccyx
   if (xr && xr.procChanged) xr.procChanged();
 }
 document.querySelectorAll('[data-proc]').forEach((b) => b.addEventListener('click', () => setProc(b.dataset.proc)));
+// ganglion impar route: 'scj' through the sacrococcygeal joint, 'cj1' through the first intercoccygeal joint
+function setRoute(r) {
+  setup.route = r;
+  document.querySelectorAll('[data-route]').forEach((b) => b.classList.toggle('sel', b.dataset.route === r));
+  setupCentre();
+  if (xr && xr.procChanged) xr.procChanged();
+}
+document.querySelectorAll('[data-route]').forEach((b) => b.addEventListener('click', () => setRoute(b.dataset.route)));
 function setRoot(r) {
   setup.root = r;
   document.querySelectorAll('[data-root]').forEach((b) => b.classList.toggle('sel', b.dataset.root === r));
@@ -372,11 +382,19 @@ $('sl-tilt').addEventListener('input', (e) => setTilt(+e.target.value));
 $('sl-obl').addEventListener('input', (e) => setObl(+e.target.value));
 $('sl-pos').addEventListener('input', (e) => setAlong(+e.target.value));
 
+let inRectum = false;
 function needleChanged() {
   state.setupDirty = true;
   state.lastMove = performance.now();
   if (state.live) { state.dirty = true; state.hq = false; }
   needleReadout();
+  // ganglion impar: the rectum lies a few mm in front of the coccyx
+  const r = !!(contrast && needle.state === 'skin' && contrast.classify(needle.tip()) === 'rectal');
+  if (r && !inRectum) {
+    hint('Needle in the RECTUM: withdraw now. The needle is contaminated: use a new one.', 6);
+    if (xr) xr.buzz(0.6, 150);
+  }
+  inRectum = r;
 }
 
 function needleReadout() {
@@ -774,7 +792,7 @@ async function start() {
     levels = {
       'L3-4': W(mid(lm.L3, lm.L4)), 'L4-5': W(mid(lm.L4, lm.L5)), 'L5-S1': W(mid(lm.L5, lm.S1)),
       Caudal: meta.anatomy.sacral ? W([meta.anatomy.sacral.midline_x, meta.anatomy.sacral.hiatus_centre[1], meta.anatomy.sacral.hiatus_centre[2]]) : W(lm.sacral_hiatus),
-      Impar: W(lm.sacrococcygeal),
+      Impar: meta.anatomy.impar ? W(meta.anatomy.impar.scj.c) : W(lm.sacrococcygeal),
     };
     const lv = $('levels');
     Object.keys(levels).forEach((name) => {
@@ -794,14 +812,14 @@ async function start() {
     xr = await setupXR(renderer, scene, {
       canvas: fcanvas, shot, moveCArm, panCArm, toggleLive, toggleBones, needle,
       injectContrast, toggleHideContrast, clearContrast, pen,
-      setProc, contrastML, setCurved, setFlex, saveCArm, gotoSavedCArm, carm, setup, setRoot, setSide, setPlate, setTilt, setObl, setAlong, along, setupCentre, setupCheck,
+      setProc, setRoute, contrastML, setCurved, setFlex, saveCArm, gotoSavedCArm, carm, setup, setRoot, setSide, setPlate, setTilt, setObl, setAlong, along, setupCentre, setupCheck,
       tray: new THREE.Vector3(0.38, TABLE_TOP + 0.03, MIDLINE_Z + 0.36),
       togglePreset: () => setPreset(state.preset === 'AP' ? 'LAT' : 'AP'),
       onXR: () => {},
     });
     savedRefresh();
     loading.classList.add('hide');
-    window.sim = { setProc, controls, soft, setView, VIEWS, setFlex, saveCArm, gotoSavedCArm, setCurved, setup, setupCentre, setupCheck, setRoot, setSide, setTilt, setObl, setAlong, xr, pen, setPenMode, skinHit, contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
+    window.sim = { setProc, setRoute, controls, soft, setView, VIEWS, setFlex, saveCArm, gotoSavedCArm, setCurved, setup, setupCentre, setupCheck, setRoot, setSide, setTilt, setObl, setAlong, xr, pen, setPenMode, skinHit, contrast, injectContrast, toggleHideContrast, clearContrast, needle, tapSkin, placeNeedleAt, setPlacing, renderer, scene, camera, carm, shot, setPreset, goLevel, moveCArm, panCArm, toggleBones, toggleLive, levels, state, makeImage };
   } catch (e) {
     loading.textContent = `Could not start: ${e.message}`;
     console.error(e);

@@ -80,4 +80,5 @@ select { background: #26303b; color: var(--text); border: 1px solid var(--line);
 button:disabled { opacity: 0.45; }
 button.goto:not(:disabled) { border-color: #2c9a57; }
 
-#tab-setup.caudal .tf-only { display: none; }
+#tab-setup.caudal .tf-only, #tab-setup.impar .tf-only { display: none; }
+#tab-setup:not(.impar) .impar-only { display: none; }

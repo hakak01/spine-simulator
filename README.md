@@ -62,6 +62,12 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 - Technique: enter just below the hiatus at about 45°, go through the sacrococcygeal ligament into the canal, then inject 3 mL. The needle follows the needle rules, so you can only flatten it while it is under 15 mm deep; deeper, start again lower and flatter.
 - On this CT the hiatus apex is at about S4 and the dural sac ends at S2.
 
+**Ganglion impar block** (Setup tab → Block → Ganglion impar; in VR press BLOCK until it says GANGLION IMPAR):
+- Choose the route: through the sacrococcygeal joint (transsacrococcygeal), or through the first intercoccygeal joint, Co1-Co2 (transcoccygeal). The C-arm goes to a lateral view centred on that joint.
+- The coccyx stops the needle everywhere except at its joints, as in real life. On lateral, find the joint (a thin pale line in the bone), enter in the midline over it, line the needle up with the joint and go straight through. On this CT the sacrococcygeal joint runs about 23° toward the head from back to front, and Co1-Co2 about 10°. Set the angle in the first 15 mm (needle rules). The joint is only about 3 mm wide, so the bevel matters: with the notch at 12 or 6 o'clock the drift pushes the tip into the bone; turn the hub so the notch is at 3 or 9 o'clock and the drift runs along the joint.
+- Stop 1-3 mm past the front of the bone and inject 2 mL. The checklist shows where the tip is (behind the coccyx, in the joint, in the retrorectal space, on bone, in the rectum), how many mm it is in front of the bone, how far it is from the rectum, the needle angle against the joint line, and the distance to the ganglion.
+- The rectum is close: on this CT it is about 8 mm in front of the sacrococcygeal joint and 17 mm in front of Co1-Co2. If the tip enters the rectum you get a warning (and a buzz in VR): withdraw, and use a new needle.
+
 **Quest 3:** press "Enter VR".
 - Left stick: rotate/tilt C-arm; hold the left trigger to move it instead. X: shot. Y: AP/LAT. A: live. B: bones.
 - Grip: hold the needle (pick it up from the tray). Touch the back with the tip to enter there.
@@ -70,9 +76,9 @@ Open the GitHub Pages link on your phone or in the Quest 3 browser.
 - Buttons under the C-arm screen and on the left wrist: BENT TIP on/off, BACK TO SKIN.
 - On the C-arm setup panel: SAVE C-ARM POSITION, RETURN TO SAVED, and the "Needle bend" slider (0% rigid pipe to 100% normal).
 - Let go and the needle stays in; the bend springs back to straight. Grip near the hub to take it again. To take it out: withdraw to the skin, then pull your hand back.
-- Right trigger: inject contrast (1 mL; caudal 3 mL). Right stick click: hide/show contrast. Left stick click: clear contrast.
+- Right trigger: inject contrast (1 mL; caudal 3 mL; ganglion impar 2 mL). Right stick click: hide/show contrast. Left stick click: clear contrast.
 - Marker pen: it lies on the tray next to the needle. Hold grip near it to pick it up. Touch the back to draw (light buzz); it slides on the skin and does not go in. Let go while it touches the skin and it stays standing there; take a shot to see its metal tip.
-- C-arm setup panel to the left of the C-arm screen (it moves with the screen): BLOCK button (transforaminal / caudal), root and side buttons, sliders for tilt, oblique and position (point and hold the trigger, then move), CENTRE, AP CHECK, LAT CHECK, SHOT, endplate choice, and the same live checklist.
+- C-arm setup panel to the left of the C-arm screen (it moves with the screen): BLOCK button (transforaminal / caudal / ganglion impar), route buttons for the ganglion impar, root and side buttons, sliders for tilt, oblique and position (point and hold the trigger, then move), CENTRE, AP CHECK, LAT CHECK, SHOT, endplate choice, and the same live checklist.
 - EXIT VR and ERASE INK buttons are under the C-arm screen and on your left wrist. Point with the controller and pull the trigger; for EXIT VR press twice (the first press shows "PRESS AGAIN").
 - Point at the screen and hold grip to move the screen.
 
@@ -84,7 +90,7 @@ Limits: the CT has 1.5 mm voxels, so the image is a little softer than a real C-
 
 ## How the needle works
 
-The needle is a 22G spinal needle (0.7 mm). Bone is found from the CT (above 180 HU inside the segmented bones), so the needle stops where the real bone surface is. The needle is drawn into the C-arm image as a steel cylinder with a plastic hub, so a needle in line with the beam shows as a dot inside the hub ring ("hub view").
+The needle is a 22G spinal needle (0.7 mm). Bone is found from the CT (above 180 HU inside the segmented bones), so the needle stops where the real bone surface is. The coccyx and the lowest sacrum are thin and low in density on CT, so they always stop the needle, except at the sacrococcygeal and Co1-Co2 joints. The needle is drawn into the C-arm image as a steel cylinder with a plastic hub, so a needle in line with the beam shows as a dot inside the hub ring ("hub view").
 
 The needle's track through tissue and its tip direction are stored at every 0.25 mm, so drift and bends show on the C-arm image (up to 8 straight pieces). It passes through soft organs without warning.
 
@@ -112,14 +118,23 @@ The tip position decides the pattern, using the tissue map:
 | caudal: sacral canal, random vascular uptake (3 % just past the ligament, rising to 20 % when 10 mm or more of needle is up the canal) | vascular: streaks along the sacral epidural veins, gone in < 1 s |
 | caudal: behind the sacrum or in the ligament | subcutaneous: an irregular cloud behind the sacrum, no canal outline |
 | caudal: tip pressed on bone | intraosseous: marrow blush in the sacrum |
+| ganglion impar: retrorectal space in front of the sacrum / coccyx (or within 1.5 mm of it) | ganglion impar: collects at the tip and runs up along the front of the bone, a "reverse comma" (apostrophe) on lateral and a midline blot on AP |
+| ganglion impar: retrorectal space, random vascular uptake (5 %) | vascular: streak along the median sacral vessels, gone in < 1 s |
+| ganglion impar: inside the joint | in the joint: a thin line of contrast in the joint |
+| rectum | rectal: mottled contrast coating the rectal wall, plus a warning to withdraw and change the needle |
+| soft tissue behind or beside the coccyx | soft tissue: an irregular cloud |
 
-Contrast spreads through the matching space over time (a shortest-path flood through the tissue map, 1 mL), is smoothed, and is drawn into the C-arm image like the CT.
+Contrast spreads through the matching space over time (a shortest-path flood through the tissue map; 1 mL transforaminal, 3 mL caudal, 2 mL ganglion impar), is smoothed, and is drawn into the C-arm image like the CT.
 For comparison, a prospective study found intravascular spread in 8.1 % of lumbar and 21.3 % of S1 transforaminal injections (Furman MB et al. *Spine* 2000;25:2628-32, doi:10.1097/00007632-200010150-00014). The trainer uses higher rates on purpose.
 For caudal blocks, intravascular spread was 20.3 % when the needle was advanced into the canal and 3.2 % when it stayed just past the sacrococcygeal ligament (Park SJ et al. *J Pain Res* 2018;11:2961-7, doi:10.2147/JPR.S182227); a smaller study found 24 % with the needle 1 cm into the canal vs 0 % (Doo AR et al. *Korean J Pain* 2015;28:122-8, doi:10.3344/kjp.2015.28.2.122). Without fluoroscopy, a caudal needle was in the right place only 74 % of the time (Stitz MY, Sommer HM. *Spine* 1999;24:1371-6, doi:10.1097/00007632-199907010-00016).
+For ganglion impar blocks, vascular uptake was seen in 1 of 78 transcoccygeal blocks, 1.3 % (Foye PM et al. *Indian J Radiol Imaging* 2020;30:181-3, doi:10.4103/ijri.IJRI_302_19); the trainer uses 5 % on purpose. On CT, the rectum was less than 1 mm from the sacrococcyx in some patients (Kwon YS et al. *Medicine* 2020;99:e20935, doi:10.1097/MD.0000000000020935).
+Ganglion impar routes: transsacrococcygeal (Toshniwal GR et al. *Pain Physician* 2007;10:661-6, PMID 17876362) and transcoccygeal through the first intercoccygeal joint; a randomised comparison found both effective, with the transcoccygeal route easier (Malhotra N et al. *J Anaesthesiol Clin Pharmacol* 2021;37:90-6, doi:10.4103/joacp.JOACP_588_20). The ganglion is a single retroperitoneal ganglion at the level of the sacrococcygeal junction (Nalini KB et al. *J Anaesthesiol Clin Pharmacol* 2018;34:544-7, doi:10.4103/joacp.JOACP_301_16).
 
 The CT does not show nerve roots, so `tools/spine_anatomy.py` builds them: discs (between vertebral bodies), epidural space (4.5 mm ring round the dural sac), foramina (below each pedicle) and the exiting L3, L4 and L5 roots (round the lower border of the pedicle, through the upper foramen, then down and out toward the psoas).
 
 `tools/sacral.py` builds the sacrum for the caudal block from this CT: the sacral canal (the low-density gap between the vertebral bodies and the dorsal plate, followed down the midline), the hiatus (where the dorsal plate stops), the sacrococcygeal ligament (a thin layer over the hiatus), the dorsal sacral foramina S1-S4 on both sides, and modelled S1-S4 roots and epidural veins (from the canal out through each foramen).
+
+`tools/impar.py` builds the coccyx for the ganglion impar block. The two joints are only 1-2 voxels thick on this CT, and the marrow inside each small coccygeal body is just as dark, so their levels were picked by looking at sagittal and coronal slices (`JOINT_Z` in `tools/prepare_ct.py`); the code then finds each joint's exact height and tilt as the thin slab of lowest density there. It also marks the retrorectal (presacral) space (soft tissue in front of the sacrum and coccyx, up to the rectum, within 15 mm of the midline, from the coccyx tip to S3), and models the ganglion impar (2 mm in front of the sacrococcygeal joint), the two sympathetic trunks (medial to the anterior sacral foramina, joining at the ganglion) and the median sacral artery and vein.
 
 ## How the setup coach measures
 
@@ -135,6 +150,12 @@ Caudal block:
 - Distance to the dural sac: measured along the sacral canal from the end of the sac (S2 on this CT); more than 10 mm is marked as safe.
 - Needle up the canal: the length of the needle track inside the canal; more than 5 mm raises the vascular chance (see How contrast works).
 
+Ganglion impar:
+- Lateral and centred: as for the caudal block, centred on the chosen joint.
+- Tip in front of the bone: signed distance from the front surface of the sacrum and coccyx in the midline; 0-6 mm is marked as good.
+- Rectum: straight-line distance from the tip to the nearest rectum voxel (searched up to 30 mm); under 5 mm is marked as too close.
+- Needle against the joint: the needle's angle on lateral compared with the joint line; within 8° is marked as lined up.
+
 ## Soft tissues in the 3D views
 
 | Structure | Source |
@@ -145,6 +166,8 @@ Caudal block:
 | Nerve roots L3-L5 with dorsal root ganglion | modelled (CT cannot show them): round the lower border of the pedicle, through the upper foramen |
 | L3 and L4 lumbar segmental arteries | modelled: from the aorta round the waist of the vertebral body to the foramen, where the spinal (radicular) branch joins the root |
 | Sacral roots S1-S4, sacral epidural veins, sacrococcygeal ligament | modelled from the sacral canal, foramina and hiatus found on the CT (`tools/sacral.py`) |
+| Rectum and sigmoid colon (below S2) | this patient's CT (TotalSegmentator colon mask), see-through |
+| Ganglion impar, sympathetic trunks, median sacral artery and vein | modelled (`tools/impar.py`): ganglion just in front of the sacrococcygeal joint, trunks medial to the anterior sacral foramina |
 
 Not in the model: ligamentum flavum, interspinous ligament, small veins outside the sacrum, fat as a separate layer. The soft tissues are for viewing; the needle still uses the tissue map only for bone and contrast.
 
@@ -152,7 +175,7 @@ Not in the model: ligamentum flavum, interspinous ligament, small veins outside 
 
 - CT: TotalSegmentator dataset v2.0.1 (small subset), case s0461, 57-year-old male, labelled "no pathology". Licence CC BY 4.0. Zenodo doi:10.5281/zenodo.10047263.
   Wasserthal J, Breit HC, Meyer MT, et al. TotalSegmentator: Robust Segmentation of 104 Anatomic Structures in CT Images. *Radiol Artif Intell.* 2023;5(5):e230024. doi:10.1148/ryai.230024
-- Changes made to the CT (`tools/prepare_ct.py`): CT table and outside air removed; IV contrast removed from the aorta, IVC, iliac vessels and kidneys; cropped from the coccyx to L2; stored as 8-bit (HU = value × 10 − 1000).
+- Changes made to the CT (`tools/prepare_ct.py`): CT table and outside air removed; IV contrast removed from the aorta, IVC, iliac vessels and kidneys; cropped from the coccyx to L2; coccyx bone (not its joints) raised by 250 HU, because at 1.5 mm voxels the thin coccyx reads too low (partial volume) and almost vanished on the lateral image; stored as 8-bit (HU = value × 10 − 1000).
 - three.js r170 (MIT licence), in `vendor/three`.
 
 This is a training aid with one patient's anatomy. It is not a medical device and does not replace supervised training.
@@ -161,4 +184,4 @@ This is a training aid with one patient's anatomy. It is not a medical device an
 
 - `index.html`, `src/` – the app (no build step)
 - `data/` – prepared CT, tissue labels and meshes
-- `tools/prepare_ct.py` – rebuilds `data/` from the source dataset (with `tools/spine_anatomy.py`, `tools/soft_tissue.py` and `tools/sacral.py`)
+- `tools/prepare_ct.py` – rebuilds `data/` from the source dataset (with `tools/spine_anatomy.py`, `tools/soft_tissue.py`, `tools/sacral.py` and `tools/impar.py`)

@@ -5,9 +5,9 @@ import * as THREE from 'three';
 
 export const VIEWS = [
   { name: 'Skin', skin: 1, show: [] },
-  { name: 'Fascia', skin: 0.1, show: ['fascia', 'ligament', 'psoas', 'gluteal', 'sac', 'roots', 'arteries', 'veins', 'discs', 'bone'] },
-  { name: 'Muscles', skin: 0.1, show: ['erector', 'ligament', 'psoas', 'gluteal', 'sac', 'roots', 'arteries', 'veins', 'discs', 'bone'] },
-  { name: 'Nerves + vessels', skin: 0.1, show: ['sac', 'ligament', 'roots', 'arteries', 'veins', 'discs', 'bone'] },
+  { name: 'Fascia', skin: 0.1, show: ['fascia', 'ligament', 'psoas', 'gluteal', 'sac', 'roots', 'arteries', 'veins', 'discs', 'rectum', 'bone'] },
+  { name: 'Muscles', skin: 0.1, show: ['erector', 'ligament', 'psoas', 'gluteal', 'sac', 'roots', 'arteries', 'veins', 'discs', 'rectum', 'bone'] },
+  { name: 'Nerves + vessels', skin: 0.1, show: ['sac', 'ligament', 'roots', 'arteries', 'veins', 'discs', 'rectum', 'bone'] },
   { name: 'Bones', skin: 0.22, show: ['bone'] },
 ];
 
@@ -22,6 +22,7 @@ const MATS = {
   gluteal: { color: 0x8f3630, roughness: 0.8 },
   fascia: { color: 0xe8e3d6, roughness: 0.35, metalness: 0.05 },
   ligament: { color: 0xf4f1e6, roughness: 0.4 },
+  rectum: { color: 0xb86b5e, roughness: 0.6, transparent: true, opacity: 0.55, depthWrite: false },
 };
 
 export class SoftTissue {
@@ -38,7 +39,7 @@ export class SoftTissue {
     if (!soft) return;
     const add = (name, geom) => {
       const m = new THREE.Mesh(geom, new THREE.MeshStandardMaterial(MATS[name] || MATS.erector));
-      if (name === 'sac') m.renderOrder = 2;
+      if (name === 'sac' || name === 'rectum') m.renderOrder = 2;
       this.parts[name] = m;
       this.patient.add(m);
     };
@@ -74,6 +75,18 @@ export class SoftTissue {
         }
       }
     }
+    // ganglion impar and the two sympathetic trunks joining at it (modelled)
+    const I = meta.anatomy.impar;
+    if (I) {
+      for (const pts of Object.values(I.trunks)) {
+        const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)));
+        roots.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.9, 6, false), rootMat));
+      }
+      const gang = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), rootMat);
+      gang.position.set(...I.ganglion);
+      gang.scale.set(2.2, 1.6, 3.2);   // oval, about 4 x 3 x 6 mm
+      roots.add(gang);
+    }
     this.parts.roots = roots;
     this.patient.add(roots);
     // sacral epidural veins (modelled), joined to the real veins
@@ -100,6 +113,18 @@ export class SoftTissue {
       }
       this.parts.arteries = g;
       this.patient.add(g);
+    }
+    // median sacral artery and vein (modelled)
+    if (I && I.vessels) {
+      for (const [name, part] of [['artery', 'arteries'], ['vein', 'veins']]) {
+        const pts = I.vessels[name];
+        if (!pts || !this.parts[part]) continue;
+        let g = this.parts[part];
+        if (!g.isGroup) { const grp = new THREE.Group(); grp.add(g); this.patient.add(grp); this.parts[part] = g = grp; }
+        const mat = g.children[0].material;
+        const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)));
+        g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, pts.length * 4, 0.8, 6, false), mat));
+      }
     }
     this.apply();
   }

@@ -63,7 +63,7 @@ export async function setupXR(renderer, scene, ctx) {
     'GRIP: hold the needle. Move your hand to aim, push in or pull out',
     'or RIGHT stick up/down: advance / withdraw.  Left/right: turn the hub',
     'Deep (over 15 mm) the hand only leans the hub: withdraw to redirect',
-    'RIGHT TRIGGER: inject contrast (1 mL; caudal 3 mL), live fluoro',
+    'RIGHT TRIGGER: inject contrast (1 mL; caudal 3 mL; impar 2 mL), live fluoro',
     'Right stick click: hide / show contrast   Left stick click: clear it',
     'PEN on the tray: grip near it, touch the skin to draw (metal tip shows)',
     'Screen: point + hold GRIP to move it. Buttons + setup sliders: point + TRIGGER',
@@ -114,9 +114,15 @@ export async function setupXR(renderer, scene, ctx) {
   // ----- C-arm setup panel (left of the screen; moves with it) -----
   const panel = new VRPanel(768, 1400, 0.4);
   panel.title = 'C-ARM SETUP';
-  panel.button('proc', 400, 8, 344, 52, '', () => ctx.setProc(ctx.setup.proc === 'caudal' ? 'tfesi' : 'caudal'));
+  const PROCS = ['tfesi', 'caudal', 'impar'];
+  panel.button('proc', 400, 8, 344, 52, '', () => ctx.setProc(PROCS[(PROCS.indexOf(ctx.setup.proc) + 1) % PROCS.length]));
   const procBtn = panel.widgets.find((k) => k.id === 'proc');
-  const tfOnly = () => ctx.setup.proc !== 'caudal';
+  const tfOnly = () => ctx.setup.proc === 'tfesi';
+  const imparOnly = () => ctx.setup.proc === 'impar';
+  // ganglion impar route (same place as the root buttons, which are hidden then)
+  panel.button('routeSCJ', 24, 72, 352, 62, 'SACROCOCCYGEAL JOINT', () => ctx.setRoute('scj'), () => ctx.setup.route === 'scj');
+  panel.button('routeCJ1', 392, 72, 352, 62, 'Co1-Co2 JOINT', () => ctx.setRoute('cj1'), () => ctx.setup.route === 'cj1');
+  for (const k of panel.widgets) if (/^route/.test(k.id)) k.when = imparOnly;
   const fmtDeg = (pos, neg) => (v) => (Math.abs(v) < 0.25 ? '0°' : `${Math.abs(v).toFixed(1)}° ${v > 0 ? pos : neg}`);
   ['L3', 'L4', 'L5'].forEach((r, i) => panel.button(`root${r}`, 24 + i * 112, 72, 100, 62, `${r} root`, () => ctx.setRoot(r), () => ctx.setup.root === r));
   panel.button('sideL', 400, 72, 160, 62, 'LEFT', () => ctx.setSide('L'), () => ctx.setup.side === 'L');
@@ -142,7 +148,7 @@ export async function setupXR(renderer, scene, ctx) {
   panel.textTop = 890;
   const redrawPanel = () => {
     gotoBtn.label = savedTxt ? `RETURN: ${savedTxt}` : 'RETURN TO SAVED';
-    procBtn.label = ctx.setup.proc === 'caudal' ? 'BLOCK: CAUDAL' : 'BLOCK: TRANSFORAMINAL';
+    procBtn.label = { tfesi: 'BLOCK: TRANSFORAMINAL', caudal: 'BLOCK: CAUDAL', impar: 'BLOCK: GANGLION IMPAR' }[ctx.setup.proc];
     plateBtn.label = ctx.setup.plate === 'upper' ? 'SQUARE: lower endplate of upper vertebra' : 'SQUARE: upper endplate of lower vertebra';
     panel.draw();
   };

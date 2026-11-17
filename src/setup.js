@@ -19,7 +19,8 @@ export class Setup {
     this.root = 'L4';
     this.side = 'L';          // patient's left / right
     this.plate = 'upper';     // 'upper' = lower endplate of the upper vertebra, 'lower' = upper endplate of the lower one
-    this.proc = 'tfesi';      // 'tfesi' (transforaminal) | 'caudal'
+    this.proc = 'tfesi';      // 'tfesi' (transforaminal) | 'caudal' | 'impar' (ganglion impar)
+    this.route = 'scj';       // ganglion impar: 'scj' through the sacrococcygeal joint | 'cj1' through Co1-Co2
     this.lin = new THREE.Matrix3().setFromMatrix4(worldToVol);
     this.cache = null;
   }
@@ -88,7 +89,101 @@ export class Setup {
   }
 
   // ---- C-arm actions ----
-  centre() { this.carm.iso.copy(this.proc === 'caudal' ? this.hiatusWorld() : this.targetWorld()); }
+  centre() {
+    this.carm.iso.copy(this.proc === 'caudal' ? this.hiatusWorld() : this.proc === 'impar' ? this.jointWorld() : this.targetWorld());
+  }
+
+  // view of the sacrum relative to the S1 pedicles: 0 = AP, 90 = true lateral
+  sacralView() {
+    const P = this.anat.pedicles.S1;
+    const lat = new THREE.Vector3(...P.R.c).sub(new THREE.Vector3(...P.L.c)).normalize();
+    const d = this.toVolDir(this.dirFor(this.carm.obl, this.carm.tilt));
+    return Math.asin(Math.max(-1, Math.min(1, Math.abs(d.dot(lat))))) / DEG;
+  }
+  viewLine(out, apText) {
+    const rel = this.sacralView();
+    if (rel >= 75) out.push({ ok: rel >= 82, text: rel >= 82 ? 'Lateral of the sacrum and coccyx: seen side on' : `Lateral, ${(90 - rel).toFixed(0)}° off true: rotate the C-arm a little` });
+    else if (rel <= 5) out.push({ ok: null, text: apText });
+    else out.push({ ok: false, text: 'Use a lateral view to find the target and judge depth, AP to check the midline' });
+  }
+
+  // ---- ganglion impar ----
+  jointWorld() { return this.toWorld(this.anat.impar[this.route].c); }
+  // signed mm from the front surface of the sacrum / coccyx in the midline (+ = in front of it)
+  frontMM(t) {
+    const F = this.anat.impar.front;
+    let best = null;
+    for (let i = 0; i + 1 < F.length; i++) {
+      const [ay, az] = F[i], [by, bz] = F[i + 1];
+      const dy = by - ay, dz = bz - az, L2 = dy * dy + dz * dz || 1;
+      const u = Math.max(0, Math.min(1, ((t.y - ay) * dy + (t.z - az) * dz) / L2));
+      const py = ay + u * dy, pz = az + u * dz, d = Math.hypot(t.y - py, t.z - pz);
+      if (!best || d < best.d) {
+        const L = Math.sqrt(L2), ny = dz / L, nz = -dy / L;          // normal pointing to the front
+        best = { d, s: Math.sign((t.y - py) * ny + (t.z - pz) * nz) || 1 };
+      }
+    }
+    return best ? best.d * best.s : 0;
+  }
+  // mm from the tip to the rectum (searched up to 30 mm), cached per tip position
+  rectumMM(t) {
+    if (this.recCache && t.distanceTo(this.recCache.t) < 0.3) return this.recCache.d;
+    const T = this.tissue, sp = [T.sx, T.sy, T.sz], c = [t.x / sp[0], t.y / sp[1], t.z / sp[2]].map(Math.round);
+    const zTop = this.anat.sacral.level_z.S2 / sp[2], R = 20;
+    let best = Infinity;
+    for (let z = Math.max(0, c[2] - R); z <= Math.min(T.nz - 1, c[2] + R, zTop); z++) {
+      for (let y = Math.max(0, c[1] - R); y <= Math.min(T.ny - 1, c[1] + R); y++) {
+        const row = y * T.nx + z * T.nx * T.ny;
+        for (let x = Math.max(0, c[0] - R); x <= Math.min(T.nx - 1, c[0] + R); x++) {
+          if (T.labels[row + x] !== 6) continue;
+          const d = Math.hypot((x - c[0]) * sp[0], (y - c[1]) * sp[1], (z - c[2]) * sp[2]);
+          if (d < best) best = d;
+        }
+      }
+    }
+    this.recCache = { t: t.clone(), d: best };
+    return best;
+  }
+  imparLines() {
+    const I = this.anat.impar, J = I[this.route], out = [];
+    const way = this.route === 'scj' ? 'through the sacrococcygeal joint' : 'through the first intercoccygeal joint (Co1-Co2)';
+    out.push({ ok: null, text: `Ganglion impar ${way}. Target: just in front of the sacrococcygeal junction, where the ganglion lies` });
+    this.viewLine(out, 'AP view: use it to check the needle stays in the midline');
+    const centred = this.carm.iso.distanceTo(this.jointWorld()) < 0.03;
+    out.push({ ok: centred, text: centred ? `Centred on the ${this.route === 'scj' ? 'sacrococcygeal' : 'Co1-Co2'} joint` : 'Centre the C-arm on the joint (CENTRE)' });
+    const tiltTxt = Math.abs(J.tilt) < 3 ? 'straight down' : `${Math.abs(J.tilt).toFixed(0)}° toward the ${J.tilt > 0 ? 'head' : 'feet'}`;
+    const N = this.needle;
+    if (!N || N.state !== 'skin' || N.depth < 1) {
+      out.push({ ok: null, text: `Enter in the midline over the joint. On lateral this joint runs ${tiltTxt} from back to front: aim the needle along it and go straight through. ${J.rectum_mm == null ? "The rectum is more than 30 mm in front of it" : `The rectum is ${Math.round(J.rectum_mm)} mm in front of it`}` });
+      return out;
+    }
+    const tw = N.tip(), t = tw.clone().applyMatrix4(this.worldToVol);
+    const kind = this.classify ? this.classify(tw) : '';
+    const front = this.frontMM(t), rec = this.rectumMM(t);
+    let where;
+    if (kind === 'rectal') where = { ok: false, text: 'TIP IN THE RECTUM: withdraw now. The needle is contaminated: use a new one' };
+    else if (N.boneContact) where = { ok: false, text: `Tip on bone: withdraw and redirect into the joint. Turn the hub so the notch is at 3 or 9 o'clock (now ${N.notchClock()}): the drift then runs along the joint, not into the bone` };
+    else if (kind === 'joint') where = { ok: false, text: 'Tip in the joint: advance 1-2 mm to come out in front' };
+    else if (kind === 'impar') where = { ok: true, text: 'Tip in the retrorectal space, in front of the coccyx' };
+    else if (kind === 'vascular') where = { ok: false, text: 'Tip in a vessel: adjust' };
+    else where = { ok: false, text: front < 0 ? 'Tip behind the coccyx (not through the joint yet)' : 'Tip in soft tissue, off the retrorectal space' };
+    out.push(where);
+    if (kind !== 'rectal') {
+      out.push({ ok: front > 0 && front <= 6 ? true : front > 6 ? false : null,
+        text: front >= 0 ? `Tip ${front.toFixed(0)} mm in front of the bone${front > 6 ? ': too deep, withdraw toward the bone' : ''}` : `Tip ${(-front).toFixed(0)} mm behind the front of the bone` });
+      out.push({ ok: rec >= 5 ? null : false, text: rec > 29 ? 'Rectum more than 30 mm away' : `Tip ${rec.toFixed(0)} mm from the rectum${rec < 5 ? ': too close' : ''}` });
+    }
+    // needle line against the joint line (lateral)
+    const d = this.toVolDir(N.tipDir);
+    const ang = Math.atan2(d.z, d.y) / DEG;                  // 0 = straight anterior, + = toward the head
+    if (front < 2 && kind !== 'rectal') {
+      const off = ang - J.tilt;
+      out.push({ ok: Math.abs(off) <= 8, text: Math.abs(off) <= 8 ? 'Needle lined up with the joint' : `Needle ${Math.abs(off).toFixed(0)}° ${off > 0 ? 'toward the head' : 'toward the feet'} of the joint line` });
+    }
+    const g = new THREE.Vector3(...I.ganglion);
+    out.push({ ok: null, text: `Tip ${t.distanceTo(g).toFixed(0)} mm from the ganglion impar (modelled), ${Math.abs(t.x - I.midline_x).toFixed(0)} mm ${t.x - I.midline_x > 0 ? 'right' : 'left'} of the midline` });
+    return out;
+  }
 
   // ---- caudal ----
   // C-arm centre for the caudal block: midline, at the sacral canal, at the hiatus
@@ -123,13 +218,10 @@ export class Setup {
   }
 
   caudalLines() {
-    const c = this.carm, out = [], S = this.anat.sacral;
+    const out = [], S = this.anat.sacral;
     out.push({ ok: null, text: `Caudal epidural: through the sacral hiatus (apex at about ${this.sacralLevel(S.hiatus_apex[2])} here); the dural sac ends at ${this.sacralLevel(S.sac_end[2])}` });
     // view: relative to the S1 pedicles (true lateral = beam along the line between them)
-    const P = this.anat.pedicles.S1;
-    const lat = new THREE.Vector3(...P.R.c).sub(new THREE.Vector3(...P.L.c)).normalize();
-    const d = this.toVolDir(this.dirFor(c.obl, c.tilt));
-    const rel = Math.asin(Math.max(-1, Math.min(1, Math.abs(d.dot(lat))))) / DEG;   // 0 = AP, 90 = lateral
+    const rel = this.sacralView();
     const centred = this.carm.iso.distanceTo(this.hiatusWorld()) < 0.03;
     if (rel >= 75) out.push({ ok: rel >= 82, text: rel >= 82 ? 'Lateral of the sacrum: hiatus and canal seen side on' : `Lateral, ${(90 - rel).toFixed(0)}° off true: rotate the C-arm a little` });
     else if (rel <= 5) out.push({ ok: null, text: 'AP view: use it to check the needle stays in the midline' });
@@ -177,6 +269,7 @@ export class Setup {
   // ---- checklist for the UI: [{ok: true|false|null, text}] ----
   lines() {
     if (this.proc === 'caudal') return this.caudalLines();
+    if (this.proc === 'impar') return this.imparLines();
     const c = this.carm, out = [];
     const rel = this.relOblique(c.obl, c.tilt);
     const sideName = this.side === 'L' ? 'left' : 'right';
